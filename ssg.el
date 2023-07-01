@@ -27,27 +27,60 @@
 (require 'cl-lib)
 (require 'ox-html)
 
-;; Might swap out org-html-style-default for (org-html-head-include-default-style . nil)
+(defun ssg--wrap-in-layout (body)
+  (concat
+"<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+    <meta charset=\"UTF-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\">
+    <title>My cool ssg.el site</title>
+    <link rel=\"stylesheet\" href=\"https://cdn.simplecss.org/simple.min.css\">
+</head>
+<body>"
+body
+"</body>
+</html>"))
+
+(defun ssg--parse-org (input-data)
+  "TODO"
+  (let (html)
+    ;; Override ox HTML exports to produce bare-minimum HTML contents.
+    (advice-add
+     #'org-html-template :override
+     (lambda (contents _i) (setq html contents)))
+
+    ;; (advice-add
+    ;;  #'org-html-keyword :before
+    ;;  (lambda (keyword _c _i) 'todo))
+
+    (with-temp-buffer
+      (insert input-data)
+      (org-html-export-as-html))
+
+    html))
 
 (cl-defun ssg-config (&key base-dir out-dir)
-  "todo"
+  "TODO"
   (let ((org-files (directory-files-recursively base-dir ".*\.org"))
-        (out-dir (expand-file-name (or out-dir "output/") base-dir))
-        (org-html-style-default "<link rel=\"stylesheet\" href=\"https://cdn.simplecss.org/simple.min.css\">"))
+        (out-dir (expand-file-name (or out-dir "output/") base-dir)))
     (cl-loop
      for file in org-files
      do
      (let ((destination-file (expand-file-name
                               (replace-regexp-in-string ".org" ".html" file)
-                              out-dir)))
+                              out-dir))
+           (input-data (with-temp-buffer
+                         (insert-file-contents file)
+                         (buffer-string))))
        (save-excursion
          (unless (file-exists-p out-dir)
            (make-directory out-dir))
-         (with-current-buffer (find-file file)
-             (save-restriction
-               (widen)
-               (make-empty-file destination-file)
-               (org-export-to-file 'html destination-file))))))))
+         (make-empty-file destination-file)
+         (with-temp-file destination-file
+           (insert (ssg--wrap-in-layout
+                    (ssg--parse-org input-data)))))))))
 
 (provide 'ssg)
 ;;; ssg.el ends here
