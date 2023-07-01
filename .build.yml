@@ -1,17 +1,9 @@
-image: alpine/edge
-oauth: pages.sr.ht/PAGES:RW
+image: debian/stable
 packages:
-- hut
 - emacs
-environment:
-  site: ssg.srht.site
+sources:
+  - https://git.sr.ht/~mgmarlow/ssg
 tasks:
 - test: |
-    cd $site
+    cd ssg
     make test
-- package: |
-    cd $site
-    make build-docs
-    tar -C output -cvz . > ../site.tar.gz
-- upload: |
-    hut pages publish -d $site site.tar.gz
