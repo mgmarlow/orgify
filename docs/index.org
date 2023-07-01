@@ -1,0 +1,30 @@
+#+title: ssg.el
+
+A simple static site generator that understands =org=.
+
+Source code: https://git.sr.ht/~mgmarlow/ssg.el
+
+* Installation
+
+TODO
+
+* Configuration options
+
+- =base-dir=: Directory where =ssg.el= searches for =.org= files.
+- =out-dir=: Build destination for the HTML site.
+
+* Example site structure
+
+See [[https://git.sr.ht/~mgmarlow/ssg.el/tree/main/item/example_site][examples]].
+
+#+begin_src txt
+  my-cool-site/
+    posts/
+      2023-07-01-first-post.org
+  index.org 
+  build.el
+#+end_src
+
+* License
+
+Licensed under [[https://git.sr.ht/~mgmarlow/ssg.el/tree/main/item/LICENSE][GPL-3.0]].

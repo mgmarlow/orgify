@@ -1,4 +1,4 @@
-# ssg.el
+# ssg.el (WIP)
 
 A simple org-mode static site generator in Emacs.
 

@@ -3,8 +3,6 @@
 (add-to-list 'load-path "../")
 (require 'ssg)
 
-(ssg-config
+(ssg-build
  :base-dir "."
  :out-dir "output/")
-
-

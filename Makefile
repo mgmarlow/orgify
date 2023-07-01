@@ -1,4 +1,4 @@
-EMACS := emacs -Q -batch
+EMACS := emacs -Q
 
 LOADPATH := -L .
 
@@ -11,10 +11,16 @@ COMPILED_FILES := $(wildcard *.elc)
 .PHONY: compile test clean
 
 test: compile
-	$(EMACS) $(LOADPATH) -l ert -l $(TEST_FILES) -f ert-run-tests-batch-and-exit
+	$(EMACS) -batch $(LOADPATH) -l ert -l $(TEST_FILES) -f ert-run-tests-batch-and-exit
 
 compile: clean
-	$(EMACS) $(LOADPATH) -f batch-byte-compile $(PACKAGE_FILES)
+	$(EMACS) -batch $(LOADPATH) -f batch-byte-compile $(PACKAGE_FILES)
 
-clean:
+clean: clean-docs
 	rm -f $(COMPILED_FILES)
+
+clean-docs:
+	rm -rf output/
+
+build-docs: clean-docs
+	$(EMACS) --script build-docs.el

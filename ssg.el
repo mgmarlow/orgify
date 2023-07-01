@@ -27,6 +27,7 @@
 (require 'cl-lib)
 (require 'ox-html)
 
+;; TODO: Actual HTML templating
 (defun ssg--wrap-in-layout (body)
   (concat
 "<!DOCTYPE html>
@@ -61,26 +62,28 @@ body
 
     html))
 
-(cl-defun ssg-config (&key base-dir out-dir)
+(cl-defun ssg-build (&key base-dir out-dir)
   "TODO"
-  (let ((org-files (directory-files-recursively base-dir ".*\.org"))
-        (out-dir (expand-file-name (or out-dir "output/") base-dir)))
-    (cl-loop
-     for file in org-files
-     do
-     (let ((destination-file (expand-file-name
-                              (replace-regexp-in-string ".org" ".html" file)
-                              out-dir))
-           (input-data (with-temp-buffer
-                         (insert-file-contents file)
-                         (buffer-string))))
-       (save-excursion
-         (unless (file-exists-p out-dir)
-           (make-directory out-dir))
-         (make-empty-file destination-file)
-         (with-temp-file destination-file
-           (insert (ssg--wrap-in-layout
-                    (ssg--parse-org input-data)))))))))
+  (let* ((base-dir (or base-dir "."))
+         (out-dir (or out-dir "output/"))
+         (org-files (directory-files-recursively base-dir ".*\.org")))
+    (dolist (file org-files)
+      ;; Relative file name so files are in the same directory format as the
+      ;; base dir (avoid repeating the base-dir directory under out-dir).
+      (let* ((rel (file-relative-name file base-dir))
+            (destination-file (expand-file-name
+                               (concat (file-name-sans-extension rel) ".html")
+                               out-dir))
+             (input-data (with-temp-buffer
+                           (insert-file-contents file)
+                           (buffer-string))))
+        (save-excursion
+          (unless (file-exists-p out-dir)
+            (make-directory out-dir))
+          (make-empty-file destination-file)
+          (with-temp-file destination-file
+            (insert (ssg--wrap-in-layout
+                     (ssg--parse-org input-data)))))))))
 
 (provide 'ssg)
 ;;; ssg.el ends here

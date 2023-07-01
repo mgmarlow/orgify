@@ -1,0 +1,17 @@
+image: alpine/edge
+oauth: pages.sr.ht/PAGES:RW
+packages:
+- hut
+- emacs
+environment:
+  site: ssg.srht.site
+tasks:
+- test: |
+    cd $site
+    make test
+- package: |
+    cd $site
+    make build-docs
+    tar -C output -cvz . > ../site.tar.gz
+- upload: |
+    hut pages publish -d $site site.tar.gz
