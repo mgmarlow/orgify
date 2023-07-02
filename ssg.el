@@ -1,4 +1,4 @@
-;;; ssg.el --- A static site generator built in Emacs Lisp  -*- lexical-binding: t; -*-
+;;; ssg.el --- A static site generator that understands org -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023  Graham Marlow
 

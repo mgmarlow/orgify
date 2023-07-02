@@ -2,7 +2,7 @@ image: debian/stable
 packages:
 - emacs
 sources:
-  - https://git.sr.ht/~mgmarlow/ssg
+  - https://git.sr.ht/~mgmarlow/ssg.el
 tasks:
 - test: |
     cd ssg

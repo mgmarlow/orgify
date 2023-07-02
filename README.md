@@ -1,6 +1,6 @@
 # ssg.el (WIP)
 
-A simple org-mode static site generator in Emacs.
+A simple static site generator that understands org.
 
 ## Contributing
 

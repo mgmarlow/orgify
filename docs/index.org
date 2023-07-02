@@ -1,6 +1,8 @@
 #+title: ssg.el
 #+options: toc:nil
 
+* ssg.el
+
 (WIP) A simple static site generator that understands =org=.
 
 Source code: https://git.sr.ht/~mgmarlow/ssg.el
