@@ -27,25 +27,21 @@
 (require 'cl-lib)
 (require 'ox-html)
 
-;; TODO: Actual HTML templating
-(defun ssg--wrap-in-layout (body)
-  (concat
-"<!DOCTYPE html>
+(defvar-local ssg--default-template
+    "<!DOCTYPE html>
 <html lang=\"en\">
 <head>
-    <meta charset=\"UTF-8\">
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-    <meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\">
-    <title>My cool ssg.el site</title>
-    <link rel=\"stylesheet\" href=\"https://cdn.simplecss.org/simple.min.css\">
-    <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">
-    <link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/favicon-32x32.png\">
-    <link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"/favicon-16x16.png\">
+  <meta charset=\"UTF-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+  <meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\">
+  <title>My cool ssg.el site</title>
+  <link rel=\"stylesheet\" href=\"https://cdn.simplecss.org/simple.min.css\">
+  <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">
 </head>
-<body>"
-body
-"</body>
-</html>"))
+<body>
+  {{ content }}
+</body>
+</html>")
 
 (defun ssg--parse-org (input-data)
   "Given org INPUT-DATA as a string, produce HTML."
@@ -65,6 +61,11 @@ body
 
     html))
 
+(defun ssg--parse-handlebars (handlebars)
+  "Return inner expression from HANDLEBARS as a string."
+  (string-trim (substring handlebars 2 (- (length handlebars) 2))))
+
+;; TODO: static doesn't really need to be relative to base-dir
 (cl-defun ssg-build (&key base-dir out-dir rel-static-dir)
   "TODO
 
@@ -81,10 +82,11 @@ into OUT-DIR, relative to BASE-DIR."
     ;; Copy over static assets.
     (when (file-exists-p source-static-dir)
       (copy-directory source-static-dir out-dir nil nil 'copy-contents))
-    ;; org->HTML
+    ;; Convert org->HTML
     (dolist (file org-files)
-      ;; Relative file name so files are in the same directory format as the
-      ;; base dir (avoid repeating the base-dir directory under out-dir).
+      ;; Relative file name so files are in the same directory format
+      ;; as the base dir (avoid repeating the base-dir directory under
+      ;; out-dir).
       (let* ((rel (file-relative-name file base-dir))
              (destination-file (expand-file-name
                                 (concat (file-name-sans-extension rel) ".html")
@@ -93,11 +95,23 @@ into OUT-DIR, relative to BASE-DIR."
                            (insert-file-contents file)
                            (buffer-string))))
         (save-excursion
-          ;; Convert individual files to HTML and write them to output.
           (make-empty-file destination-file)
           (with-temp-file destination-file
-            (insert (ssg--wrap-in-layout
-                     (ssg--parse-org input-data)))))))))
+            ;; Insert template w/ handlebars
+            (insert ssg--default-template)
+            (goto-char (point-min))
+            (let ((content (ssg--parse-org input-data)))
+              ;; Replace handlebar expressions with content.
+              (while (re-search-forward "{{.*[a-z*].*}}" nil t)
+                ;; It's important to preserve match data since we're
+                ;; calling substring to parse out the template
+                ;; content (which will mutate).
+                (let ((expr (save-match-data
+                                (and (match-string 0)
+                                     (ssg--parse-handlebars (match-string 0))))))
+                  ;; TODO: map expressions to arbitrary data.
+                  (when (string= expr "content")
+                    (replace-match content)))))))))))
 
 (provide 'ssg)
 ;;; ssg.el ends here
