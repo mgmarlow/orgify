@@ -8,7 +8,10 @@ TEST_FILES := $(wildcard *-test.el)
 
 COMPILED_FILES := $(wildcard *.elc)
 
-.PHONY: compile test clean
+.PHONY: install compile test clean clean-docs build-docs publish-docs
+
+install:
+	npm install wrangler --global
 
 test: compile
 	$(EMACS) -batch $(LOADPATH) -l ert -l $(TEST_FILES) -f ert-run-tests-batch-and-exit
@@ -24,3 +27,6 @@ clean-docs:
 
 build-docs: clean-docs
 	$(EMACS) --script build-docs.el
+
+publish-docs: build-docs
+	wrangler pages deploy output/

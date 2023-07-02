@@ -1,6 +1,8 @@
-# orgify.el (WIP)
+# Orgify
 
-A simple static site generator that understands org.
+A simple static site generator that understands [org](https://orgmode.org).
+
+[Read the docs](https://orgify.pages.dev/)
 
 ## Contributing
 

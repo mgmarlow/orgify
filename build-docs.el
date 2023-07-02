@@ -3,6 +3,31 @@
 (add-to-list 'load-path ".")
 (require 'orgify)
 
+(setq orgify-default-template
+    "<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"UTF-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+  <meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\">
+  <title>{{ title }}</title>
+  <link rel=\"stylesheet\" href=\"https://cdn.simplecss.org/simple.min.css\">
+  <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">
+</head>
+<body>
+  <header>
+    <h1>Orgify</h1>
+    <p>A simple static site generator that understands <a href=\"https://orgmode.org\">org</a>.</p>
+  </header>
+  {{ content }}
+  <footer>
+    <p>
+      Created by <a href=\"https://mgmarlow.com\">Graham Marlow</a> and licensed under <a href=\"https://git.sr.ht/~mgmarlow/orgify.el/tree/main/item/LICENSE\">GPL-3.0</a>. Browse the <a href=\"https://git.sr.ht/~mgmarlow/orgify\">source</a>.
+    </p>
+  </footer>
+</body>
+</html>")
+
 (orgify-build
  :base-dir "docs/"
  :static-dir "docs/public/"
