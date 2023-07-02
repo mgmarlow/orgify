@@ -1,4 +1,5 @@
 #+title: ssg.el
+#+options: toc:nil
 
 (WIP) A simple static site generator that understands =org=.
 
@@ -15,7 +16,7 @@ TODO
 
 * Example site structure
 
-See [[https://git.sr.ht/~mgmarlow/ssg.el/tree/main/item/example_site][examples]].
+This documentation is built with =ssg.el=: [[https://git.sr.ht/~mgmarlow/ssg.el/tree/main/item/build-docs.el][build-docs.el]].
 
 #+begin_src txt
   my-cool-site/

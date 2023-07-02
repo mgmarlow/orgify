@@ -45,7 +45,7 @@ body
 </html>"))
 
 (defun ssg--parse-org (input-data)
-  "TODO"
+  "Given org INPUT-DATA as a string, produce HTML."
   (let (html)
     ;; Override ox HTML exports to produce bare-minimum HTML contents.
     (advice-add
@@ -62,24 +62,38 @@ body
 
     html))
 
-(cl-defun ssg-build (&key base-dir out-dir)
-  "TODO"
+(cl-defun ssg-build (&key base-dir out-dir rel-static-dir)
+  "TODO
+
+REL-STATIC-DIR is a directory of static files that are copied
+into OUT-DIR, relative to BASE-DIR."
   (let* ((base-dir (or base-dir "."))
          (out-dir (or out-dir "output/"))
+         (rel-static-dir (or rel-static-dir "public/"))
+         (source-static-dir (expand-file-name rel-static-dir base-dir))
          (org-files (directory-files-recursively base-dir ".*\.org")))
+    ;; Make output directory.
+    (unless (file-exists-p out-dir)
+      (make-directory out-dir))
+    ;; Copy over static assets.
+    (when (file-exists-p source-static-dir)
+      (copy-directory
+       source-static-dir
+       (expand-file-name rel-static-dir out-dir)
+       nil nil 'copy-contents))
+    ;; org->HTML
     (dolist (file org-files)
       ;; Relative file name so files are in the same directory format as the
       ;; base dir (avoid repeating the base-dir directory under out-dir).
       (let* ((rel (file-relative-name file base-dir))
-            (destination-file (expand-file-name
-                               (concat (file-name-sans-extension rel) ".html")
-                               out-dir))
+             (destination-file (expand-file-name
+                                (concat (file-name-sans-extension rel) ".html")
+                                out-dir))
              (input-data (with-temp-buffer
                            (insert-file-contents file)
                            (buffer-string))))
         (save-excursion
-          (unless (file-exists-p out-dir)
-            (make-directory out-dir))
+          ;; Convert individual files to HTML and write them to output.
           (make-empty-file destination-file)
           (with-temp-file destination-file
             (insert (ssg--wrap-in-layout

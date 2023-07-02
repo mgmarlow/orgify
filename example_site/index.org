@@ -1,3 +1,0 @@
-#+title:  Welcome to my blog
-
-This blog was created with =ssg.el=.
