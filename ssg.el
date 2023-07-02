@@ -34,7 +34,7 @@
   <meta charset=\"UTF-8\">
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
   <meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\">
-  <title>My cool ssg.el site</title>
+  <title>{{ title }}</title>
   <link rel=\"stylesheet\" href=\"https://cdn.simplecss.org/simple.min.css\">
   <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">
 </head>
@@ -46,21 +46,25 @@
 
 (defun ssg--parse-org (input-data)
   "Given org INPUT-DATA as a string, produce HTML."
-  (let (html)
+  (let (html
+        (keywords (make-hash-table :test 'equal)))
     ;; Override ox HTML exports to produce bare-minimum HTML contents.
     (advice-add
      #'org-html-template :override
      (lambda (contents _i) (setq html contents)))
 
-    ;; (advice-add
-    ;;  #'org-html-keyword :before
-    ;;  (lambda (keyword _c _i) 'todo))
+    (advice-add
+     #'org-html-keyword :before
+     (lambda (keyword _c _i)
+       (puthash (downcase (org-element-property :key keyword))
+                (org-element-property :value keyword)
+                keywords)))
 
     (with-temp-buffer
       (insert input-data)
       (org-html-export-as-html))
 
-    html))
+    (cl-values html keywords)))
 
 (defun ssg--parse-handlebars (handlebars)
   "Return inner expression from HANDLEBARS as a string."
@@ -99,18 +103,20 @@ copied into OUT-DIR."
             ;; Insert template w/ handlebars
             (insert ssg--default-template)
             (goto-char (point-min))
-            (let ((content (ssg--parse-org input-data)))
-              ;; Replace handlebar expressions with content.
-              (while (re-search-forward "{{.*[a-z*].*}}" nil t)
+            (cl-multiple-value-bind (content keywords)
+                (ssg--parse-org input-data)
+              (while (re-search-forward "{{[ ]*[a-z]*[ ]*}}" nil t)
                 ;; It's important to preserve match data since we're
                 ;; calling substring to parse out the template
                 ;; content (which will mutate).
                 (let ((expr (save-match-data
-                                (and (match-string 0)
-                                     (ssg--parse-handlebars (match-string 0))))))
-                  ;; TODO: map expressions to arbitrary data.
-                  (when (string= expr "content")
-                    (replace-match content)))))))))))
+                              (and (match-string 0)
+                                   (ssg--parse-handlebars (match-string 0))))))
+                  (cond ((string= expr "content") (replace-match content))
+                        (t
+                         (unless (gethash expr keywords)
+                           (error (concat "Unrecognized expression: " (match-string 0))))
+                         (replace-match (gethash expr keywords)))))))))))))
 
 (provide 'ssg)
 ;;; ssg.el ends here

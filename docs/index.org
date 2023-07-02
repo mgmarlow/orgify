@@ -1,4 +1,4 @@
-#+title: ssg.el
+#+title: SSG: Emacs static site generator
 #+options: toc:nil
 
 * ssg.el
