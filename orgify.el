@@ -1,9 +1,12 @@
-;;; ssg.el --- A static site generator that understands org -*- lexical-binding: t; -*-
+;;; orgify.el --- A static site generator that understands org -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023  Graham Marlow
 
-;; Author: Graham Marlow <mgmarlow@Grahams-Mac-mini.local>
+;; Author: Graham Marlow <info@mgmarlow.com>
 ;; Keywords: tools
+;; URL: https://git.sr.ht/~mgmarlow/orgify
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "25.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -20,14 +23,19 @@
 
 ;;; Commentary:
 
-;; 
+;; A simple static site generator that understands org. Orgify
+;; provides a little extra structure to ox-html, adding support for
+;; HTML layouts with handlebars-like expressions as well as other
+;; tools for building a static website. Use `orgify-build' to generate
+;; your static site via a script, making it easy to integrate with a
+;; build pipeline.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'ox-html)
 
-(defvar-local ssg--default-template
+(defvar orgify-default-template
     "<!DOCTYPE html>
 <html lang=\"en\">
 <head>
@@ -42,9 +50,9 @@
   {{ content }}
 </body>
 </html>"
-  "Layout template with handlebar expressions used by `ssg-build'.")
+  "Layout template with handlebar expressions used by `orgify-build'.")
 
-(defun ssg--parse-org (input-data)
+(defun orgify--parse-org (input-data)
   "Given org INPUT-DATA as a string, produce HTML."
   (let (html
         (keywords (make-hash-table :test 'equal)))
@@ -66,11 +74,11 @@
 
     (cl-values html keywords)))
 
-(defun ssg--parse-handlebars (handlebars)
+(defun orgify--parse-handlebars (handlebars)
   "Return inner expression from HANDLEBARS as a string."
   (string-trim (substring handlebars 2 (- (length handlebars) 2))))
 
-(cl-defun ssg-build (&key base-dir out-dir static-dir)
+(cl-defun orgify-build (&key base-dir out-dir static-dir)
   "TODO
 
 STATIC-DIR is a directory of static files whose contents are
@@ -101,22 +109,22 @@ copied into OUT-DIR."
           (make-empty-file destination-file)
           (with-temp-file destination-file
             ;; Insert template w/ handlebars
-            (insert ssg--default-template)
+            (insert orgify-default-template)
             (goto-char (point-min))
             (cl-multiple-value-bind (content keywords)
-                (ssg--parse-org input-data)
+                (orgify--parse-org input-data)
               (while (re-search-forward "{{[ ]*[a-z]*[ ]*}}" nil t)
                 ;; It's important to preserve match data since we're
                 ;; calling substring to parse out the template
                 ;; content (which will mutate).
                 (let ((expr (save-match-data
                               (and (match-string 0)
-                                   (ssg--parse-handlebars (match-string 0))))))
+                                   (orgify--parse-handlebars (match-string 0))))))
                   (cond ((string= expr "content") (replace-match content))
                         (t
                          (unless (gethash expr keywords)
                            (error (concat "Unrecognized expression: " (match-string 0))))
                          (replace-match (gethash expr keywords)))))))))))))
 
-(provide 'ssg)
-;;; ssg.el ends here
+(provide 'orgify)
+;;; orgify.el ends here

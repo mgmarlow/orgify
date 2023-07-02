@@ -1,4 +1,4 @@
-# ssg.el (WIP)
+# orgify.el (WIP)
 
 A simple static site generator that understands org.
 

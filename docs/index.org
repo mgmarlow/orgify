@@ -1,11 +1,11 @@
-#+title: SSG: Emacs static site generator
+#+title: Orgify: Emacs static site generator
 #+options: toc:nil
 
-* ssg.el
+* Orgify
 
-(WIP) A simple static site generator that understands =org=.
+A simple static site generator that understands =org=.
 
-Source code: https://git.sr.ht/~mgmarlow/ssg.el
+- Source code: https://git.sr.ht/~mgmarlow/orgify.el
 
 * Installation
 
@@ -13,12 +13,12 @@ TODO
 
 * Configuration options
 
-- =base-dir=: Directory where =ssg.el= searches for =.org= files.
+- =base-dir=: Directory where =orgify.el= searches for =.org= files.
 - =out-dir=: Build destination for the HTML site.
 
 * Example site structure
 
-This documentation is built with =ssg.el=: [[https://git.sr.ht/~mgmarlow/ssg.el/tree/main/item/build-docs.el][build-docs.el]].
+This documentation is built with =orgify.el=: [[https://git.sr.ht/~mgmarlow/orgify/tree/main/item/build-docs.el][build-docs.el]].
 
 #+begin_src txt
   my-cool-site/
@@ -30,4 +30,4 @@ This documentation is built with =ssg.el=: [[https://git.sr.ht/~mgmarlow/ssg.el/
 
 * License
 
-Licensed under [[https://git.sr.ht/~mgmarlow/ssg.el/tree/main/item/LICENSE][GPL-3.0]].
+Licensed under [[https://git.sr.ht/~mgmarlow/orgify.el/tree/main/item/LICENSE][GPL-3.0]].

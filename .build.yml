@@ -2,8 +2,8 @@ image: debian/stable
 packages:
 - emacs
 sources:
-  - https://git.sr.ht/~mgmarlow/ssg
+  - https://git.sr.ht/~mgmarlow/orgify
 tasks:
 - test: |
-    cd ssg
+    cd orgify
     make test
