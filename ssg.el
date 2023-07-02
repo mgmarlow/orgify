@@ -41,7 +41,8 @@
 <body>
   {{ content }}
 </body>
-</html>")
+</html>"
+  "Layout template with handlebar expressions used by `ssg-build'.")
 
 (defun ssg--parse-org (input-data)
   "Given org INPUT-DATA as a string, produce HTML."
@@ -66,22 +67,21 @@
   (string-trim (substring handlebars 2 (- (length handlebars) 2))))
 
 ;; TODO: static doesn't really need to be relative to base-dir
-(cl-defun ssg-build (&key base-dir out-dir rel-static-dir)
+(cl-defun ssg-build (&key base-dir out-dir static-dir)
   "TODO
 
-REL-STATIC-DIR is a directory of static files that are copied
-into OUT-DIR, relative to BASE-DIR."
+STATIC-DIR is a directory of static files whose contents are
+copied into OUT-DIR."
   (let* ((base-dir (or base-dir "."))
          (out-dir (or out-dir "output/"))
-         (rel-static-dir (or rel-static-dir "public/"))
-         (source-static-dir (expand-file-name rel-static-dir base-dir))
+         (static-dir (or static-dir "public/"))
          (org-files (directory-files-recursively base-dir ".*\.org")))
     ;; Make output directory.
     (unless (file-exists-p out-dir)
       (make-directory out-dir))
     ;; Copy over static assets.
-    (when (file-exists-p source-static-dir)
-      (copy-directory source-static-dir out-dir nil nil 'copy-contents))
+    (when (file-exists-p static-dir)
+      (copy-directory static-dir out-dir nil nil 'copy-contents))
     ;; Convert org->HTML
     (dolist (file org-files)
       ;; Relative file name so files are in the same directory format
