@@ -66,7 +66,6 @@
   "Return inner expression from HANDLEBARS as a string."
   (string-trim (substring handlebars 2 (- (length handlebars) 2))))
 
-;; TODO: static doesn't really need to be relative to base-dir
 (cl-defun ssg-build (&key base-dir out-dir static-dir)
   "TODO
 
