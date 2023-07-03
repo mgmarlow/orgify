@@ -1,88 +1,116 @@
 #+title: Orgify: Emacs static site generator
 #+layout: layout.tpl.html
+#+options: num:nil toc:nil
+
+Orgify is a simple static site generator for exporting [[https://orgmode.org][org files]].
+
+Under the hood Orgify works similarly to =`org-publish'=, the
+[[https://orgmode.org/manual/Publishing.html][publishing framework]] that ships with Emacs. It uses the same ox-html
+backend and re-uses many of ox's [[https://orgmode.org/manual/Export-Settings.html#Export-settings][export settings]]. The main difference
+is the addition of an HTML templating language that gives you more
+control over your org files and keywords during the final export.
 
 * Installation
-
-Orgify is designed to be run as a script (via =emacs --script=). If
-you care about running this script in CI, you need to include a
-=`package-install'= step to fetch Orgify before running
-=`orgify-build'=. Otherwise, install Orgify as a normal Emacs package
-and you're good to go.
 
 ** Emacs 29
 
 With Emacs 29 you can install packages directly from git repositories:
 
 #+begin_src emacs-lisp
-  (require 'package)
-  (package-initialize)
-  (package-refresh-contents)
-
   (use-package orgify
     :vc (:fetcher sourcehut :repo mgmarlow/orgify))
-
-  (orgify-build)
 #+end_src
 
 ** Earlier Emacs versions
 
-First, clone Orgify to a directory:
+Clone Orgify to your local machine and add it to your load path:
 
 #+begin_src shell
   git clone https://git.sr.ht/~mgmarlow/orgify /path/to/orgify
 #+end_src
 
-In your Emacs script, add Orgify to the load path before calling
-=`orgify-build'=:
-
 #+begin_src emacs-lisp
   (add-to-list 'load-path "/path/to/orgify")
   (require 'orgify)
-  (orgify-build)
 #+end_src
 
 * Using Orgify
+
+There are two main ways to use Orgify:
+
+1. Use the =`orgify-build-project'= interactive command.
+2. Use a build script with =`orgify-build'=.
+
+The =`orgify-build-project'= command works great for existing projects
+managed by =project.el=. It offers no configuration and assumes the
+default Orgify folder structure.
+
+Using a build script is ideal for publishing via CI or if building org
+files in directories other than the project root.
+
+** Orgify as an interactive command
+
+When =`orgify-build-project'= is called, it searches for =*.org= files
+from your project root (via =`project-root'=). When these files are
+converted to HTML their file names and directories are preserved. You
+must be visiting a buffer located in that project when invoking
+=`orgify-build-project'=, otherwise Orgify won't know how to locate
+your project root.
+
+The exception is the special =public/= folder, which contains static
+assets for your site. These files are copied into the output directory
+as-is.
+
+For example, this folder structure:
+
+#+begin_src shell
+  my-project-root/
+    posts/
+      2023-07-01-my-first-post.org
+      2023-07-02-my-second-post.org
+    public/
+      404.html
+      favicon.io
+    index.org
+#+end_src
+
+Outputs:
+
+#+begin_src shell
+  my-project-root/
+    output/
+      posts/
+        2023-07-01-my-first-post.html
+        2023-07-02-my-second-post.html
+      404.html
+      favicon.io
+      index.html
+#+end_src
+
+See [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Projects.html][Emacs Projects]] for more details.
+
+** Orgify as a build script
 
 Create a new build script, =build.el=, to publish your files. Note
 that Orgify must be installed as a package or available on your
 =`load-path'= before you can require it.
 
 #+begin_src emacs-lisp
-  (orgify-build)
+  (add-to-list 'load-path "/path/to/orgify")
+  (require 'orgify)
+  (orgify-build
+   :base-dir "."
+   :out-dir "output/"
+   :static-dir "public/")
 #+end_src
 
-And then execute that script:
+Execute the script with =emacs --script=:
 
 #+begin_src shell
   emacs --script build.el
 #+end_src
 
-** Project layout
-
-Project layout is flexible (see Configuration options), but Orgify
-does support a no-configuration default structure:
-
-#+begin_src shell
-  my-project/
-    posts/
-      2023-07-01-my-first-post.org
-    public/
-      404.html
-      favicon.io
-    my_layout.html
-    index.org
-    build.el
-#+end_src
-
-- All files ending with =.org= are transformed to HTML during the
-  build process. Parent directories (like =posts/=) are preserved.
-- =public/= is a special folder (configured via =:static-dir=) that
-  contains your static files. This folder is copied into the output
-  directory as-is, so it should contain your styles, favicons,
-  robots.txt, etc.
-- All other files are left behind.
-
-** Configuration options
+*** Configuration options
 
 =`orgify-build'= accepts the following keyword arguments:
 
@@ -93,10 +121,13 @@ does support a no-configuration default structure:
   - =:static-dir=: Static files that are copied into the output folder
     as-is. Defaults to ="public/"=.
 
-** Keywords and layouts
+* Templates
 
 Orgify supports a handlebars-like templating language, allowing you to
 pass keywords from your org-mode files into your HTML templates.
+
+Use the =layout= keyword in your org file to specify a local template
+in your project.
 
 For example, this org file:
 
@@ -136,17 +167,16 @@ Renders this as final output
 
 *** Protected keywords
 
-There are some keywords in Orgify that behave in special ways:
+Orgify has a few protected keywords:
 
 - =content=: The HTML output of your org file.
 - =layout=: Path to the HTML template that lays out the current org
   file. Defaults to Orgify's Simple.css template.
-- =options=: The same as =ox-html= options, used during =org->html=
-  conversion. e.g. =toc:nil= avoids generating a table of contents.
+- =options=: The same as org's [[https://orgmode.org/manual/Export-Settings.html#Export-settings][Export Settings]].
 
 All other user-defined keywords are fair game.
 
-* Examples
+* Sites using Orgify
 
 - [[https://git.sr.ht/~mgmarlow/orgify/tree/main/item/build-docs.el][This documentation]]
 
