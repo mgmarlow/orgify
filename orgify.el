@@ -35,7 +35,7 @@
 (require 'cl-lib)
 (require 'ox-html)
 
-(defvar orgify-default-template
+(defvar-local orgify--default-template
     "<!DOCTYPE html>
 <html lang=\"en\">
 <head>
@@ -79,10 +79,18 @@
   (string-trim (substring handlebars 2 (- (length handlebars) 2))))
 
 (cl-defun orgify-build (&key base-dir out-dir static-dir)
-  "TODO
+  "Build org files into a static website.
 
-STATIC-DIR is a directory of static files whose contents are
-copied into OUT-DIR."
+Orgify supports a number of optional keyword arguments:
+
+* BASE-DIR is the location of your org files. Defaults to the root
+directory.
+
+* STATIC-DIR is a directory of static files whose contents are
+copied into OUT-DIR. Defaults to public/.
+
+* OUT-DIR is the build destination of your site. Defaults to
+  output/."
   (let* ((base-dir (or base-dir "."))
          (out-dir (or out-dir "output/"))
          (static-dir (or static-dir "public/"))
@@ -108,11 +116,17 @@ copied into OUT-DIR."
         (save-excursion
           (make-empty-file destination-file)
           (with-temp-file destination-file
-            ;; Insert template w/ handlebars
-            (insert orgify-default-template)
-            (goto-char (point-min))
             (cl-multiple-value-bind (content keywords)
                 (orgify--parse-org input-data)
+
+              ;; Insert layout first.
+              (if (gethash "layout" keywords)
+                  (insert-file-contents
+                   (expand-file-name (gethash "layout" keywords) base-dir))
+                (insert orgify--default-template))
+              (goto-char (point-min))
+
+              ;; Replace handlebar expressions.
               (while (re-search-forward "{{[ ]*[a-z]*[ ]*}}" nil t)
                 ;; It's important to preserve match data since we're
                 ;; calling substring to parse out the template

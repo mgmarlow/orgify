@@ -1,4 +1,5 @@
 #+title: Orgify: Emacs static site generator
+#+layout: layout.tpl.html
 
 * Installation
 
@@ -42,14 +43,15 @@ In your Emacs script, add Orgify to the load path before calling
 
 * Using Orgify
 
-Create a new build script to publish your files:
+Create a new build script, =build.el=, to publish your files. Note
+that Orgify must be installed as a package or available on your
+=`load-path'= before you can require it.
 
 #+begin_src emacs-lisp
-  ;; build.el
   (orgify-build)
 #+end_src
 
-Execute that script:
+And then execute that script:
 
 #+begin_src shell
   emacs --script build.el
@@ -57,8 +59,8 @@ Execute that script:
 
 ** Project layout
 
-By default, Orgify expects your project layout to look something like
-this:
+Project layout is flexible (see Configuration options), but Orgify
+does support a no-configuration default structure:
 
 #+begin_src shell
   my-project/
@@ -67,69 +69,86 @@ this:
     public/
       404.html
       favicon.io
+    my_layout.html
     index.org
     build.el
 #+end_src
 
-Note that the =posts/= directory is not significant, it's just to
-demonstrate that directory structure is preserved when building your
-site.
-
-All files ending in =.org= are transformed to HTML via
-=ox-html=. Static files in =public/= are copied into the output
-directory as-is. Each of these directories is configurable via keyword
-arguments to =`orgify-build'=.
+- All files ending with =.org= are transformed to HTML during the
+  build process. Parent directories (like =posts/=) are preserved.
+- =public/= is a special folder (configured via =:static-dir=) that
+  contains your static files. This folder is copied into the output
+  directory as-is, so it should contain your styles, favicons,
+  robots.txt, etc.
+- All other files are left behind.
 
 ** Configuration options
 
-  - =:base-dir=: Directory where =orgify.el= searches for =.org= files.
-  - =:out-dir=: Build destination for the HTML site.
-  - =:static-dir=: Static files that are copied into the output folder as-is.
+=`orgify-build'= accepts the following keyword arguments:
 
-Example:
+  - =:base-dir=: Directory where Orgify searches for =.org=
+    files. Defaults to current directory (="*"=).
+  - =:out-dir=: Build destination for the final HTML site. Defaults to
+    ="output/"=.
+  - =:static-dir=: Static files that are copied into the output folder
+    as-is. Defaults to ="public/"=.
 
-  #+begin_src emacs-lisp
-    (orgify-build
-     :base-dir "docs/"
-     :out-dir "dist/"
-     :static-dir "docs/public/")
-#+end_src
+** Keywords and layouts
 
-** HTML templates
+Orgify supports a handlebars-like templating language, allowing you to
+pass keywords from your org-mode files into your HTML templates.
 
-Call =`setq'= on =`orgify-default-template'= to configure your HTML
-template.
-
-(this is subject to change when multiple template support is added)
-
-*** Org-mode keywords
-
-Orgify supports a handlebars-like syntax, allowing you to pass
-keywords from your org-mode files into your HTML templates. Only one
-template is currently supported, accessible via the
-=`orgify-default-template'= variable.
-
-Any keyword defined on your org-mode file (with two exceptions
-outlined below) is available to your HTML layout via curly braces.
-For example, the =#+title:= attribute from the following org file is
-provided to the template via ={{ title }}=.
+For example, this org file:
 
 #+begin_src org
   #+title: My first post
-  #+options: toc:nil
+  #+layout: my_layout.html
 
   * Hello world!
 #+end_src
 
-=content= and =options= are protected keywords.
+That's pointing to this template:
 
-- =content= is the HTML body content of your org file.
-- =options= allows you to configure options for =ox-html=, like
-  disabling table of contents generation via =toc:nil=.
+#+begin_src html
+  <!-- my_layout.html -->
+  <html lang="en">
+    <head>
+      <title>{{ title }}</title>
+    </head>
+    <body>
+      <main>{{ content }}</main>
+    </body>
+  </html>
+#+end_src
+
+Renders this as final output
+
+#+begin_src html
+  <html lang="en">
+    <head>
+      <title>My first post</title>
+    </head>
+    <body>
+      <main><h2>Hello world!</h2></main>
+    </body>
+  </html>
+#+end_src
+
+*** Protected keywords
+
+There are some keywords in Orgify that behave in special ways:
+
+- =content=: The HTML output of your org file.
+- =layout=: Path to the HTML template that lays out the current org
+  file. Defaults to Orgify's Simple.css template.
+- =options=: The same as =ox-html= options, used during =org->html=
+  conversion. e.g. =toc:nil= avoids generating a table of contents.
+
+All other user-defined keywords are fair game.
 
 * Examples
 
-The documentation you're currently reading is built with Orgify: [[https://git.sr.ht/~mgmarlow/orgify/tree/main/item/build-docs.el][build-docs.el]].
+- [[https://git.sr.ht/~mgmarlow/orgify/tree/main/item/build-docs.el][This documentation]]
 
 * Kudos/prior art
 
