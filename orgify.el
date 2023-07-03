@@ -34,6 +34,7 @@
 
 (require 'cl-lib)
 (require 'ox-html)
+(require 'project)
 
 (defvar-local orgify--default-template
     "<!DOCTYPE html>
@@ -42,7 +43,7 @@
   <meta charset=\"UTF-8\">
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
   <meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\">
-  <title>{{ title }}</title>
+  <title>my cool Orgify site</title>
   <link rel=\"stylesheet\" href=\"https://cdn.simplecss.org/simple.min.css\">
   <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">
 </head>
@@ -74,6 +75,28 @@
 
     (cl-values html keywords)))
 
+(defun orgify--search-and-replace-handlebars (content keywords)
+  "Replace handlebars expressions in current buffer.
+
+CONTENT is HTML content that is substituted for the {{ content }}
+expression.
+
+KEYWORDS is a hash-table of arbitrary key-value pairs.  An
+expression {{ key }} is substituted with value, if that key
+exists in KEYWORDS.  Otherwise, an error is thrown."
+  (while (re-search-forward "{{[ ]*[a-z]*[ ]*}}" nil t)
+    ;; It's important to preserve match data since we're
+    ;; calling substring to parse out the template
+    ;; content (which will mutate).
+    (let ((expr (save-match-data
+                  (and (match-string 0)
+                       (orgify--parse-handlebars (match-string 0))))))
+      (cond ((string= expr "content") (replace-match content))
+            (t
+             (unless (gethash expr keywords)
+               (error (concat "Unrecognized expression: " (match-string 0))))
+             (replace-match (gethash expr keywords)))))))
+
 (defun orgify--parse-handlebars (handlebars)
   "Return inner expression from HANDLEBARS as a string."
   (string-trim (substring handlebars 2 (- (length handlebars) 2))))
@@ -81,23 +104,22 @@
 (cl-defun orgify-build (&key base-dir out-dir static-dir)
   "Build org files into a static website.
 
-Orgify supports a number of optional keyword arguments:
-
-* BASE-DIR is the location of your org files. Defaults to the root
+BASE-DIR is the location of your org files.  Defaults to the root
 directory.
 
-* STATIC-DIR is a directory of static files whose contents are
-copied into OUT-DIR. Defaults to public/.
+STATIC-DIR is a directory of static files whose contents are
+copied into OUT-DIR.  Defaults to public/.
 
-* OUT-DIR is the build destination of your site. Defaults to
+OUT-DIR is the build destination of your site.  Defaults to
   output/."
   (let* ((base-dir (or base-dir "."))
          (out-dir (or out-dir "output/"))
          (static-dir (or static-dir "public/"))
          (org-files (directory-files-recursively base-dir ".*\.org")))
     ;; Make output directory.
-    (unless (file-exists-p out-dir)
-      (make-directory out-dir))
+    (when (file-exists-p out-dir)
+      (delete-directory out-dir t))
+    (make-directory out-dir)
     ;; Copy over static assets.
     (when (file-exists-p static-dir)
       (copy-directory static-dir out-dir nil nil 'copy-contents))
@@ -118,27 +140,30 @@ copied into OUT-DIR. Defaults to public/.
           (with-temp-file destination-file
             (cl-multiple-value-bind (content keywords)
                 (orgify--parse-org input-data)
-
-              ;; Insert layout first.
+              ;; First, lay down the template.
               (if (gethash "layout" keywords)
                   (insert-file-contents
                    (expand-file-name (gethash "layout" keywords) base-dir))
                 (insert orgify--default-template))
               (goto-char (point-min))
+              ;; Then replace expressions in the layout w/ content.
+              (orgify--search-and-replace-handlebars content keywords))))))))
 
-              ;; Replace handlebar expressions.
-              (while (re-search-forward "{{[ ]*[a-z]*[ ]*}}" nil t)
-                ;; It's important to preserve match data since we're
-                ;; calling substring to parse out the template
-                ;; content (which will mutate).
-                (let ((expr (save-match-data
-                              (and (match-string 0)
-                                   (orgify--parse-handlebars (match-string 0))))))
-                  (cond ((string= expr "content") (replace-match content))
-                        (t
-                         (unless (gethash expr keywords)
-                           (error (concat "Unrecognized expression: " (match-string 0))))
-                         (replace-match (gethash expr keywords)))))))))))))
+;;;###autoload
+(defun orgify-build-project ()
+  "Builds current project with `orgify-build'.
+
+Assumes the default Orgify project structure, using
+`project-root' as the base directory."
+  (interactive)
+  (save-window-excursion
+    (unless (project-current)
+      (error "File %s is not part of any known project"
+             (buffer-file-name (buffer-base-buffer))))
+    (let ((base-dir (project-root (project-current))))
+      (orgify-build :base-dir base-dir
+                    :static-dir (expand-file-name "public/" base-dir)
+                    :out-dir (expand-file-name "output/" base-dir)))))
 
 (provide 'orgify)
 ;;; orgify.el ends here
