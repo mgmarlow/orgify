@@ -1,3 +1,3 @@
 #+title: Hello world
 
-Lorem ipsum.
+I'm a simple page.

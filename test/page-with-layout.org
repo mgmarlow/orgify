@@ -1,0 +1,4 @@
+#+title: Layout page!
+#+layout: main.html
+
+I'm a page with a layout.
