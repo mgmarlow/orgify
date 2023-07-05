@@ -6,7 +6,7 @@
 ;; Keywords: tools
 ;; URL: https://git.sr.ht/~mgmarlow/orgify
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "25.1"))
+;; Package-Requires: ((emacs "28.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -23,12 +23,12 @@
 
 ;;; Commentary:
 
-;; A simple static site generator that understands org. Orgify
+;; A simple static site generator that understands org.  Orgify
 ;; provides a little extra structure to ox-html, adding support for
 ;; HTML layouts with handlebars-like expressions as well as other
-;; tools for building a static website. Use `orgify-build' to generate
-;; your static site via a script, making it easy to integrate with a
-;; build pipeline.
+;; tools for building a static website.  Use `orgify-build' to
+;; generate your static site via a script, or `orgify-build-project'
+;; to generate one interactively.
 
 ;;; Code:
 
@@ -53,10 +53,29 @@
 </html>"
   "Layout template with handlebar expressions used by `orgify-build'.")
 
-(defun orgify--parse-org (input-data)
-  "Given org INPUT-DATA as a string, produce HTML."
-  (let (html
-        (keywords (make-hash-table :test 'equal)))
+(cl-defstruct orgify-page slug html layout keywords)
+
+;; This function stores the converted HTML and HTML layout as strings
+;; on the page struct. This may prove to be inefficient, so it's
+;; likely the actual HTML data will be moved elsewhere in the
+;; future.
+(defun orgify--build-page (org-file-name &optional base-dir)
+  "Create an `orgify-page' from ORG-FILE-NAME.
+
+Parses org content from ORG-FILE-NAME to HTML via ox-html.  Org
+file keywords are accesible via `orgify-page-keywords'.
+
+BASE-DIR is an optional argument that resolves filepaths relative
+to BASE-DIR rather than their default."
+  (let* (html
+         ;; Relative file name so files are in the same directory
+         ;; format as the base dir (avoid repeating the base-dir
+         ;; directory under out-dir).
+         (base-dir (or base-dir (file-name-directory org-file-name)))
+         (slug (file-name-sans-extension
+                (file-relative-name org-file-name base-dir)))
+         (keywords (make-hash-table :test 'equal)))
+
     ;; Override ox HTML exports to produce bare-minimum HTML contents.
     (advice-add
      #'org-html-template :override
@@ -70,10 +89,19 @@
                 keywords)))
 
     (with-temp-buffer
-      (insert input-data)
+      (insert-file-contents org-file-name)
       (org-html-export-as-html))
 
-    (cl-values html keywords)))
+    (make-orgify-page
+     :slug slug
+     :html html
+     :layout (and (gethash "layout" keywords)
+                  (expand-file-name (gethash "layout" keywords) base-dir))
+     :keywords keywords)))
+
+(defun orgify--parse-handlebars (handlebars)
+  "Return inner expression from HANDLEBARS as a string."
+  (string-trim (substring handlebars 2 (- (length handlebars) 2))))
 
 (defun orgify--search-and-replace-handlebars (content keywords)
   "Replace handlebars expressions in current buffer.
@@ -97,9 +125,29 @@ exists in KEYWORDS.  Otherwise, an error is thrown."
                (error (concat "Unrecognized expression: " (match-string 0))))
              (replace-match (gethash expr keywords)))))))
 
-(defun orgify--parse-handlebars (handlebars)
-  "Return inner expression from HANDLEBARS as a string."
-  (string-trim (substring handlebars 2 (- (length handlebars) 2))))
+;; Note that the layout parsing is repeated for every page, regardless
+;; of whether or not that layout has already been read from the file
+;; system. It's likely layouts will be moved to their own hash-table
+;; in the future.
+(defun orgify--render-page (page out-dir)
+  "Write PAGE to OUT-DIR.
+
+Replaces handlebar expressions in the page layout with the page
+content and keywords."
+  (let ((destination (expand-file-name
+                      (concat (orgify-page-slug page) ".html")
+                      out-dir)))
+    (make-empty-file destination)
+    (with-temp-file destination
+      ;; Initial layout
+      (if (orgify-page-layout page)
+          (insert-file-contents (orgify-page-layout page))
+        (insert orgify--default-template))
+      (goto-char (point-min))
+      ;; Template expressions
+      (orgify--search-and-replace-handlebars
+       (orgify-page-html page)
+       (orgify-page-keywords page)))))
 
 (cl-defun orgify-build (&key base-dir out-dir static-dir)
   "Build org files into a static website.
@@ -114,8 +162,7 @@ OUT-DIR is the build destination of your site.  Defaults to
   output/."
   (let* ((base-dir (or base-dir "."))
          (out-dir (or out-dir "output/"))
-         (static-dir (or static-dir "public/"))
-         (org-files (directory-files-recursively base-dir ".*\.org")))
+         (static-dir (or static-dir "public/")))
     ;; Make output directory.
     (when (file-exists-p out-dir)
       (delete-directory out-dir t))
@@ -123,31 +170,12 @@ OUT-DIR is the build destination of your site.  Defaults to
     ;; Copy over static assets.
     (when (file-exists-p static-dir)
       (copy-directory static-dir out-dir nil nil 'copy-contents))
-    ;; Convert org->HTML
-    (dolist (file org-files)
-      ;; Relative file name so files are in the same directory format
-      ;; as the base dir (avoid repeating the base-dir directory under
-      ;; out-dir).
-      (let* ((rel (file-relative-name file base-dir))
-             (destination-file (expand-file-name
-                                (concat (file-name-sans-extension rel) ".html")
-                                out-dir))
-             (input-data (with-temp-buffer
-                           (insert-file-contents file)
-                           (buffer-string))))
-        (save-excursion
-          (make-empty-file destination-file)
-          (with-temp-file destination-file
-            (cl-multiple-value-bind (content keywords)
-                (orgify--parse-org input-data)
-              ;; First, lay down the template.
-              (if (gethash "layout" keywords)
-                  (insert-file-contents
-                   (expand-file-name (gethash "layout" keywords) base-dir))
-                (insert orgify--default-template))
-              (goto-char (point-min))
-              ;; Then replace expressions in the layout w/ content.
-              (orgify--search-and-replace-handlebars content keywords))))))))
+    ;; Build pages ahead-of-time to collect information from page
+    ;; keywords, then render them to the output directory.
+    (dolist (page (cl-loop
+                   for file in (directory-files-recursively base-dir ".*\.org")
+                   collect (orgify--build-page file base-dir)))
+      (orgify--render-page page out-dir))))
 
 ;;;###autoload
 (defun orgify-build-project ()

@@ -1,3 +1,4 @@
+(add-to-list 'load-path "../")
 (require 'ert)
 (require 'orgify)
 
@@ -33,3 +34,17 @@
             (let ((keywords (make-hash-table :test 'equal)))
               (puthash "text" "world" keywords)
               keywords)))))
+
+(ert-deftest test-orgify--build-page ()
+  (let ((page (orgify--build-page "test/test-file.org")))
+    (should (string= "test-file" (orgify-page-slug page)))
+    (should (string= "<p>\nLorem ipsum.\n</p>\n" (orgify-page-html page)))
+    (should (equal nil (orgify-page-layout page)))
+    (should (equal '("title") (hash-table-keys (orgify-page-keywords page))))))
+
+(ert-deftest test-orgify--build-page-different-base-dir ()
+  (let ((page (orgify--build-page "test/test-file.org" (project-root (project-current)))))
+    (should (string= "test/test-file" (orgify-page-slug page)))
+    (should (string= "<p>\nLorem ipsum.\n</p>\n" (orgify-page-html page)))
+    (should (equal nil (orgify-page-layout page)))
+    (should (equal '("title") (hash-table-keys (orgify-page-keywords page))))))

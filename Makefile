@@ -4,7 +4,7 @@ LOADPATH := -L .
 
 PACKAGE_FILES := $(filter-out $(wildcard *-test.el), $(wildcard *.el))
 
-TEST_FILES := $(wildcard *-test.el)
+TEST_FILES := $(wildcard test/*-test.el)
 
 COMPILED_FILES := $(wildcard *.elc)
 
