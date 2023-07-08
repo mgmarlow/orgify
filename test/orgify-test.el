@@ -8,6 +8,9 @@
   (should (string= "content" (orgify--parse-handlebars "{{ content}}")))
   (should (string= "content" (orgify--parse-handlebars "{{content}}"))))
 
+(ert-deftest test-orgify--parse-loop ()
+  (should (equal (cons "page" "pages") (orgify--parse-loop "#each page in pages"))))
+
 (defun templatize (template content &optional keywords)
   (with-temp-buffer
     (insert template)

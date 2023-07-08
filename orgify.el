@@ -99,6 +99,11 @@ to BASE-DIR rather than their default."
                   (expand-file-name (gethash "layout" keywords) base-dir))
      :keywords keywords)))
 
+(defun orgify--parse-loop (loop-str)
+  "Parse variable and collection from LOOP-STR as cons."
+  (let ((contents (split-string (string-trim loop-str))))
+    (cons (nth 1 contents) (nth 3 contents))))
+
 (defun orgify--parse-handlebars (handlebars)
   "Return inner expression from HANDLEBARS as a string."
   (string-trim (substring handlebars 2 (- (length handlebars) 2))))
@@ -124,6 +129,22 @@ exists in KEYWORDS.  Otherwise, an error is thrown."
              (unless (gethash expr keywords)
                (error (concat "Unrecognized expression: " (match-string 0))))
              (replace-match (gethash expr keywords)))))))
+
+(defvar-local orgify--loop-regex
+    (rx (seq line-start
+             (zero-or-more blank)
+             (group "#each" (zero-or-more nonl))
+             "\n"
+             (group (zero-or-more anychar))
+             "\n"
+             (group (zero-or-more blank) "/end"))))
+
+(defun orgify--search-and-replace-loops ()
+  "Replace loop expressions in current buffer."
+  (while (re-search-forward orgify--loop-regex nil t)
+    (let ((target-items (save-match-data
+                          (orgify--parse-loop (match-string 1)))))
+      )))
 
 ;; Note that the layout parsing is repeated for every page, regardless
 ;; of whether or not that layout has already been read from the file
