@@ -130,21 +130,47 @@ exists in KEYWORDS.  Otherwise, an error is thrown."
                (error (concat "Unrecognized expression: " (match-string 0))))
              (replace-match (gethash expr keywords)))))))
 
-(defvar-local orgify--loop-regex
-    (rx (seq line-start
-             (zero-or-more blank)
-             (group "#each" (zero-or-more nonl))
-             "\n"
-             (group (zero-or-more anychar))
-             "\n"
-             (group (zero-or-more blank) "/end"))))
+;; move this stuff top of file (template language)
+(setq orgify--substitution-regexp
+      (rx "{{"
+          (zero-or-more blank)
+          (group (zero-or-more anychar))
+          (zero-or-more blank)
+          "}}"))
 
-(defun orgify--search-and-replace-loops ()
-  "Replace loop expressions in current buffer."
-  (while (re-search-forward orgify--loop-regex nil t)
-    (let ((target-items (save-match-data
-                          (orgify--parse-loop (match-string 1)))))
-      )))
+(setq orgify--loop-regexp
+      (rx (group "#each" (zero-or-more nonl))
+          "\n"
+          (group (zero-or-more anychar))
+          "\n"
+          (zero-or-more blank)
+          "/each"))
+
+(defun safe-trim (str)
+  "Trim STR while preserving match data."
+  (save-match-data (string-trim str)))
+
+;; Maybe use `looking-at' while iterating over the string to parse
+;; template syntax into an AST. Everything else just gets appended as
+;; text. That is, until `looking-at' returns a result, append the
+;; current text to a basic text node. Once a match is found, append
+;; the text node to the AST, then parse the regexp. After parsing the
+;; regexp, go back to collecting text nodes. Repeat until EOF.
+
+;; Advance point in file, collecting characters.  `looking-at' is
+;; based on current point positions.  Check regular expressions via
+;; (`looking-at'). When found, parse.
+
+(defun orgify--parse-template (&optional buffer)
+  (save-excursion
+    (let ((ast '()))
+      (while (< (point) (buffer-size buffer))
+        (cond ((looking-at orgify--substitution-regexp) (print "substitution found!"))
+              ((looking-at orgify--loop-regexp) (print "loop found!")))
+        (forward-char)))))
+
+;; TODO:
+(defun orgify--generate-code (ast))
 
 ;; Note that the layout parsing is repeated for every page, regardless
 ;; of whether or not that layout has already been read from the file
