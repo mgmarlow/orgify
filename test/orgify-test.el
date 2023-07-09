@@ -2,6 +2,7 @@
 (require 'ert)
 (require 'orgify)
 
+;; Template engine tests
 (defmacro with-simple-template (&rest body)
   `(with-temp-buffer
     (insert-file-contents "test/simple-template.html")
@@ -21,45 +22,59 @@
           (with-simple-template (orgify--tokenize)))))
 
 (ert-deftest test-orgify--parse ()
-  (should (equal '()
+  (should (equal '((text "<p>Hello ")
+	           (sub "name")
+	           (text "!</p>\n\n<ul>\n  ")
+	           (loop "page" "pages" ((text "\n  <li>\n    ")
+                                         (sub "page")
+                                         (text "\n  </li>\n  ")))
+	           (text "\n</ul>"))
                  (orgify--parse (with-simple-template (orgify--tokenize))))))
 
-(ert-deftest test-orgify--parse-handlebars ()
-  (should (string= "content" (orgify--parse-handlebars "{{ content }}")))
-  (should (string= "content" (orgify--parse-handlebars "{{content }}")))
-  (should (string= "content" (orgify--parse-handlebars "{{ content}}")))
-  (should (string= "content" (orgify--parse-handlebars "{{content}}"))))
+(ert-deftest test-orgify--generate-code ()
+  (let ((keywords (make-hash-table :test 'equal)))
+    (puthash "name" "world" keywords)
+    (puthash "pages" '("page-one" "page-two") keywords)
 
-(ert-deftest test-orgify--parse-loop ()
-  (should (equal (cons "page" "pages") (orgify--parse-loop "#each page in pages"))))
+    (setq got (orgify--generate-code
+                    (orgify--parse (with-simple-template (orgify--tokenize)))
+                    keywords))
 
-(defun templatize (template content &optional keywords)
-  (with-temp-buffer
-    (insert template)
-    (goto-char (point-min))
-    (orgify--search-and-replace-handlebars
-     content
-     (or keywords (make-hash-table)))
-    (buffer-string)))
+    (cl-loop for v in '((insert "<p>Hello ")
+                        (insert "world")
+                        (insert "!</p>\n\n<ul>\n  ")
+                        (insert "\n  <li>\n    ")
+                        (insert "page-one")
+                        (insert "\n  </li>\n  ")
+                        (insert "\n  <li>\n    ")
+                        (insert "page-two")
+                        (insert "\n  </li>\n  ")
+                        (insert "\n</ul>"))
+             for i from 0
+             do
+             (should (equal v (nth i got))))))
 
-(ert-deftest test-orgify--search-and-replace-content ()
-  (should (string=
-           "foobar"
-           (templatize "{{ content }}" "foobar")))
-  (should (string=
-           "<main>foobar</main>"
-           (templatize "<main>{{ content }}</main>" "foobar"))))
+;; This test is pretty ugly, should clean this up.
+(ert-deftest test-orgify--templatize-page ()
+  (let ((keywords (make-hash-table :test 'equal)))
+    (puthash "name" "world" keywords)
+    (puthash "pages" '("page-one" "page-two") keywords)
+    (should (string=
+             (with-temp-buffer
+               (insert-file-contents "test/expected-simple-template.html")
+               ;; Strip trailing newline from hand-edited file
+               (string-trim (buffer-string)))
+             (with-temp-buffer
+               (dolist (expr (orgify--templatize-page (make-orgify-page
+                                         :slug "foobar"
+                                         :html "<p>great content here</p>"
+                                         :layout "test/simple-template.html"
+                                         :keywords keywords)))
+                 (eval expr))
+               (print (buffer-string))
+               (buffer-string))))))
 
-(ert-deftest test-orgify--search-and-replace-keywords ()
-  (should (string=
-           "hello world"
-           (templatize
-            "{{ content }} {{ text }}"
-            "hello"
-            (let ((keywords (make-hash-table :test 'equal)))
-              (puthash "text" "world" keywords)
-              keywords)))))
-
+;; Page struct
 (ert-deftest test-orgify--build-page ()
   (let ((page (orgify--build-page "test/simple-page.org")))
     (should (string= "simple-page" (orgify-page-slug page)))

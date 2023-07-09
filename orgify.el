@@ -92,6 +92,9 @@ to BASE-DIR rather than their default."
       (insert-file-contents org-file-name)
       (org-html-export-as-html))
 
+    ;; Store HTML in keywords for easy access.
+    (puthash "content" html keywords)
+
     (make-orgify-page
      :slug slug
      :html html
@@ -99,38 +102,7 @@ to BASE-DIR rather than their default."
                   (expand-file-name (gethash "layout" keywords) base-dir))
      :keywords keywords)))
 
-(defun orgify--parse-loop (loop-str)
-  "Parse variable and collection from LOOP-STR as cons."
-  (let ((contents (split-string (string-trim loop-str))))
-    (cons (nth 1 contents) (nth 3 contents))))
-
-(defun orgify--parse-handlebars (handlebars)
-  "Return inner expression from HANDLEBARS as a string."
-  (string-trim (substring handlebars 2 (- (length handlebars) 2))))
-
-(defun orgify--search-and-replace-handlebars (content keywords)
-  "Replace handlebars expressions in current buffer.
-
-CONTENT is HTML content that is substituted for the {{ content }}
-expression.
-
-KEYWORDS is a hash-table of arbitrary key-value pairs.  An
-expression {{ key }} is substituted with value, if that key
-exists in KEYWORDS.  Otherwise, an error is thrown."
-  (while (re-search-forward "{{[ ]*[a-z]*[ ]*}}" nil t)
-    ;; It's important to preserve match data since we're
-    ;; calling substring to parse out the template
-    ;; content (which will mutate).
-    (let ((expr (save-match-data
-                  (and (match-string 0)
-                       (orgify--parse-handlebars (match-string 0))))))
-      (cond ((string= expr "content") (replace-match content))
-            (t
-             (unless (gethash expr keywords)
-               (error (concat "Unrecognized expression: " (match-string 0))))
-             (replace-match (gethash expr keywords)))))))
-
-;; move this stuff top of file (template language)
+;; Template language
 (defvar-local orgify--substitution-regexp
     (rx "{{"
         (zero-or-more blank)
@@ -148,7 +120,9 @@ exists in KEYWORDS.  Otherwise, an error is thrown."
   "Trim STR while preserving match data."
   (save-match-data (string-trim str)))
 
-(defun lastcar (l) (car (cdr l)))
+(defun lastcar (l)
+  "Get last element of L."
+  (car (cdr l)))
 
 (defun orgify--tokenize (&optional buffer)
   "Break current buffer contents into a list of tokens.
@@ -185,7 +159,6 @@ CUR instead."
   (cl-block parser
     (let (root (cur (or cur 0)))
       (while (< cur (length tokens))
-        (print cur)
         (let ((token (nth cur tokens)))
           (cond ((eq 'text (car token))
                  (push (list 'text (lastcar token)) root))
@@ -201,12 +174,44 @@ CUR instead."
                          root)
                    (setq cur (cdr subtree))))
                 ((eq 'each-end (car token))
-                 (cl-return-from parser (cons root cur)))))
+                 (cl-return-from parser (cons (reverse root) cur)))))
         (setq cur (1+ cur)))
       (reverse root))))
 
-;; TODO:
-(defun orgify--generate-code (ast))
+(defun orgify--generate-code (ast keywords)
+  "Generate code from AST, prepared for `eval'.
+
+KEYWORDS is a hash-table of org file keywords.
+
+COLLECTIONS is a hash-table of collection names to org file
+keywords."
+  (let ((expressions '()))
+    (dolist (val ast)
+      (cond ((eq 'text (car val))
+             (push `(insert ,(lastcar val)) expressions))
+            ((eq 'sub (car val))
+             (push `(insert ,(gethash (lastcar val) keywords)) expressions))
+            ((eq 'loop (car val))
+             (let ((subtree '()))
+               (dolist (iter (gethash (nth 2 val) keywords))
+                 (puthash (nth 1 val) iter keywords)
+                 (push (orgify--generate-code (nth 3 val) keywords) subtree))
+               ;; Unwind subtree for proper order and a flattened list
+               ;; of expressions. There's probably an easier way.
+               (dolist (l (reverse subtree))
+                 (dolist (v l)
+                   (push v expressions)))))))
+    (reverse expressions)))
+
+(defun orgify--templatize-page (page)
+  "Return expressions needed for evaluating PAGE."
+  (with-temp-buffer
+    (if (orgify-page-layout page)
+        (insert-file-contents (orgify-page-layout page))
+      (insert orgify--default-template))
+    (goto-char (point-min))
+    (orgify--generate-code (orgify--parse (orgify--tokenize))
+                           (orgify-page-keywords page))))
 
 ;; Note that the layout parsing is repeated for every page, regardless
 ;; of whether or not that layout has already been read from the file
@@ -222,15 +227,9 @@ content and keywords."
                       out-dir)))
     (make-empty-file destination)
     (with-temp-file destination
-      ;; Initial layout
-      (if (orgify-page-layout page)
-          (insert-file-contents (orgify-page-layout page))
-        (insert orgify--default-template))
-      (goto-char (point-min))
-      ;; Template expressions
-      (orgify--search-and-replace-handlebars
-       (orgify-page-html page)
-       (orgify-page-keywords page)))))
+      ;; Evaluate the template engine
+      (dolist (expr (orgify--templatize-page page))
+        (eval expr)))))
 
 (cl-defun orgify-build (&key base-dir out-dir static-dir)
   "Build org files into a static website.
