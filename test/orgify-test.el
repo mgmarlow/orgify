@@ -2,6 +2,28 @@
 (require 'ert)
 (require 'orgify)
 
+(defmacro with-simple-template (&rest body)
+  `(with-temp-buffer
+    (insert-file-contents "test/simple-template.html")
+    (goto-char (point-min))
+    ,@body))
+
+(ert-deftest test-orgify--tokenize ()
+  (should (equal '((text "<p>Hello ")
+	           (sub "{{ name }}")
+                   (text "!</p>\n\n<ul>\n  ")
+                   (each-begin "#each page in pages")
+                   (text "\n  <li>\n    ")
+                   (sub "{{ page }}")
+	           (text "\n  </li>\n  ")
+	           (each-end "/each")
+	           (text "\n</ul>"))
+          (with-simple-template (orgify--tokenize)))))
+
+(ert-deftest test-orgify--parse ()
+  (should (equal '()
+                 (orgify--parse (with-simple-template (orgify--tokenize))))))
+
 (ert-deftest test-orgify--parse-handlebars ()
   (should (string= "content" (orgify--parse-handlebars "{{ content }}")))
   (should (string= "content" (orgify--parse-handlebars "{{content }}")))

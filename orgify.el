@@ -134,67 +134,76 @@ exists in KEYWORDS.  Otherwise, an error is thrown."
 (defvar-local orgify--substitution-regexp
     (rx "{{"
         (zero-or-more blank)
-        (group (zero-or-more anychar))
+        (zero-or-more nonl)
         (zero-or-more blank)
         "}}"))
 
-(defvar-local orgify--loop-regexp
-    (rx (group "#each" (zero-or-more nonl))
-        "\n"
-        (group (zero-or-more anychar))
-        "\n"
-        (zero-or-more blank)
-        "/each"))
+(defvar-local orgify--each-begin-regexp
+    (rx "#each" (zero-or-more nonl)))
+
+(defvar-local orgify--each-end-regexp
+    (rx "/each" (zero-or-more nonl)))
 
 (defun safe-trim (str)
   "Trim STR while preserving match data."
   (save-match-data (string-trim str)))
 
-;; TODO: This may be cleaner if it just used a string.
-(defun orgify--parse-template (&optional buffer)
-  "Read buffer into an AST according to Orgify's template language.
+(defun lastcar (l) (car (cdr l)))
 
-If BUFFER is not nil, use that buffer as the basis for the AST instead.
+(defun orgify--tokenize (&optional buffer)
+  "Break current buffer contents into a list of tokens.
 
-Search through the buffer, reading textual data into an AST.
-Each node of the AST represents either a template language
-expression or regular text.  The AST is handed off to
-`orgify--generate-code' for evaluation."
-  (let ((ast '()) (text ""))
+If BUFFER is not nil, use that buffer instead."
+  (let ((tokens '()) (cur-text ""))
     (cl-flet ((purge-text ()
-                (when (> (length text) 0)
-                  (push (list 'text text) ast)
-                  (setq text ""))))
+                (when (> (length cur-text) 0)
+                  (push (list 'text cur-text) tokens)
+                  (setq cur-text ""))))
       (while (< (point) (buffer-size buffer))
         (cond ((looking-at orgify--substitution-regexp)
                (purge-text)
-               (push (list 'substitution
-                           (safe-trim (match-string 1)))
-                     ast)
-               (goto-char (match-end 0)))
-              ((looking-at orgify--loop-regexp)
+               (push (list 'sub (safe-trim (match-string 0))) tokens)
+               (goto-char (1- (match-end 0))))
+              ((looking-at orgify--each-begin-regexp)
                (purge-text)
-               (push (list 'loop
-                           (safe-trim (match-string 1))
-                           (let ((subtree '())
-                                 (subcontents (concat (safe-trim (match-string 2)))))
-                             ;; Open up a new buffer so we can re-run
-                             ;; the template parsing from the new
-                             ;; context. Need to save all of the
-                             ;; things beforehand. Pretty awkward.
-                             (with-temp-buffer
-                               (insert subcontents)
-                               (save-excursion
-                                 (save-match-data
-                                   (goto-char (point-min))
-                                   (setq subtree (orgify--parse-template)))))
-                             subtree))
-                     ast)
-               (goto-char (match-end 0)))
-              (t (setq text (concat text (char-to-string (char-after))))))
+               (push (list 'each-begin (match-string 0)) tokens)
+               (goto-char (1- (match-end 0))))
+              ((looking-at orgify--each-end-regexp)
+               (purge-text)
+               (push (list 'each-end (match-string 0)) tokens)
+               (goto-char (1- (match-end 0))))
+              (t (setq cur-text (concat cur-text (char-to-string (char-after))))))
         (forward-char))
-      (purge-text)
-      (reverse ast))))
+      (purge-text))
+    (reverse tokens)))
+
+(defun orgify--parse (tokens &optional cur)
+  "Parse TOKENS into an AST representing the template evaluation.
+
+Searches tokens beginning at index 0. If CUR is not nil, start at
+CUR instead."
+  (cl-block parser
+    (let (root (cur (or cur 0)))
+      (while (< cur (length tokens))
+        (print cur)
+        (let ((token (nth cur tokens)))
+          (cond ((eq 'text (car token))
+                 (push (list 'text (lastcar token)) root))
+                ((eq 'sub (car token))
+                 (push (list 'sub (nth 1 (split-string (lastcar token) " ")))
+                       root))
+                ((eq 'each-begin (car token))
+                 (let ((subtree (orgify--parse tokens (1+ cur))))
+                   (push (list 'loop
+                               (nth 1 (split-string (lastcar token) " "))
+                               (nth 3 (split-string (lastcar token) " "))
+                               (car subtree))
+                         root)
+                   (setq cur (cdr subtree))))
+                ((eq 'each-end (car token))
+                 (cl-return-from parser (cons root cur)))))
+        (setq cur (1+ cur)))
+      (reverse root))))
 
 ;; TODO:
 (defun orgify--generate-code (ast))
