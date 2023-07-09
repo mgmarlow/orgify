@@ -131,43 +131,59 @@ exists in KEYWORDS.  Otherwise, an error is thrown."
              (replace-match (gethash expr keywords)))))))
 
 ;; move this stuff top of file (template language)
-(setq orgify--substitution-regexp
-      (rx "{{"
-          (zero-or-more blank)
-          (group (zero-or-more anychar))
-          (zero-or-more blank)
-          "}}"))
+(defvar-local orgify--substitution-regexp
+    (rx "{{"
+        (zero-or-more blank)
+        (group (zero-or-more anychar))
+        (zero-or-more blank)
+        "}}"))
 
-(setq orgify--loop-regexp
-      (rx (group "#each" (zero-or-more nonl))
-          "\n"
-          (group (zero-or-more anychar))
-          "\n"
-          (zero-or-more blank)
-          "/each"))
+(defvar-local orgify--loop-regexp
+    (rx (group "#each" (zero-or-more nonl))
+        "\n"
+        (group (zero-or-more anychar))
+        "\n"
+        (zero-or-more blank)
+        "/each"))
 
 (defun safe-trim (str)
   "Trim STR while preserving match data."
   (save-match-data (string-trim str)))
 
-;; Maybe use `looking-at' while iterating over the string to parse
-;; template syntax into an AST. Everything else just gets appended as
-;; text. That is, until `looking-at' returns a result, append the
-;; current text to a basic text node. Once a match is found, append
-;; the text node to the AST, then parse the regexp. After parsing the
-;; regexp, go back to collecting text nodes. Repeat until EOF.
-
-;; Advance point in file, collecting characters.  `looking-at' is
-;; based on current point positions.  Check regular expressions via
-;; (`looking-at'). When found, parse.
-
 (defun orgify--parse-template (&optional buffer)
-  (save-excursion
-    (let ((ast '()))
+  "Read buffer into an AST according to Orgify's template language.
+
+If BUFFER is not nil, use that buffer as the basis for the AST instead.
+
+Search through the buffer, reading textual data into an AST.
+Each node of the AST represents either a template language
+expression or regular text.  The AST is handed off to
+`orgify--generate-code' for evaluation."
+  (let ((ast '()) (text ""))
+    (cl-flet ((purge-text ()
+                (when (> (length text) 0)
+                  (push (list 'text text) ast)
+                  (setq text ""))))
       (while (< (point) (buffer-size buffer))
-        (cond ((looking-at orgify--substitution-regexp) (print "substitution found!"))
-              ((looking-at orgify--loop-regexp) (print "loop found!")))
-        (forward-char)))))
+        (cond ((looking-at orgify--substitution-regexp)
+               (purge-text)
+               (push (list 'substitution
+                           (safe-trim (match-string 1)))
+                     ast)
+               (goto-char (match-end 0)))
+              ;; TODO: Send this back through the template parser
+              ;; for nested expressions.
+              ((looking-at orgify--loop-regexp)
+               (purge-text)
+               (push (list 'loop
+                           (safe-trim (match-string 1))
+                           (safe-trim (match-string 2)))
+                     ast)
+               (goto-char (match-end 0)))
+              (t (setq text (concat text (char-to-string (char-after))))))
+        (forward-char))
+      (purge-text)
+      (reverse ast))))
 
 ;; TODO:
 (defun orgify--generate-code (ast))
