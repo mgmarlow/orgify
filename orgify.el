@@ -150,6 +150,7 @@ exists in KEYWORDS.  Otherwise, an error is thrown."
   "Trim STR while preserving match data."
   (save-match-data (string-trim str)))
 
+;; TODO: This may be cleaner if it just used a string.
 (defun orgify--parse-template (&optional buffer)
   "Read buffer into an AST according to Orgify's template language.
 
@@ -171,13 +172,23 @@ expression or regular text.  The AST is handed off to
                            (safe-trim (match-string 1)))
                      ast)
                (goto-char (match-end 0)))
-              ;; TODO: Send this back through the template parser
-              ;; for nested expressions.
               ((looking-at orgify--loop-regexp)
                (purge-text)
                (push (list 'loop
                            (safe-trim (match-string 1))
-                           (safe-trim (match-string 2)))
+                           (let ((subtree '())
+                                 (subcontents (concat (safe-trim (match-string 2)))))
+                             ;; Open up a new buffer so we can re-run
+                             ;; the template parsing from the new
+                             ;; context. Need to save all of the
+                             ;; things beforehand. Pretty awkward.
+                             (with-temp-buffer
+                               (insert subcontents)
+                               (save-excursion
+                                 (save-match-data
+                                   (goto-char (point-min))
+                                   (setq subtree (orgify--parse-template)))))
+                             subtree))
                      ast)
                (goto-char (match-end 0)))
               (t (setq text (concat text (char-to-string (char-after))))))
