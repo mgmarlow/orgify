@@ -36,73 +36,8 @@
 (require 'ox-html)
 (require 'project)
 
-(defvar-local orgify--default-template
-    "<!DOCTYPE html>
-<html lang=\"en\">
-<head>
-  <meta charset=\"UTF-8\">
-  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-  <meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\">
-  <title>my cool Orgify site</title>
-  <link rel=\"stylesheet\" href=\"https://cdn.simplecss.org/simple.min.css\">
-  <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">
-</head>
-<body>
-  {{ content }}
-</body>
-</html>"
-  "Layout template with handlebar expressions used by `orgify-build'.")
+;;;; Template language
 
-(cl-defstruct orgify-page slug html layout keywords)
-
-;; This function stores the converted HTML and HTML layout as strings
-;; on the page struct. This may prove to be inefficient, so it's
-;; likely the actual HTML data will be moved elsewhere in the
-;; future.
-(defun orgify--build-page (org-file-name &optional base-dir)
-  "Create an `orgify-page' from ORG-FILE-NAME.
-
-Parses org content from ORG-FILE-NAME to HTML via ox-html.  Org
-file keywords are accesible via `orgify-page-keywords'.
-
-BASE-DIR is an optional argument that resolves filepaths relative
-to BASE-DIR rather than their default."
-  (let* (html
-         ;; Relative file name so files are in the same directory
-         ;; format as the base dir (avoid repeating the base-dir
-         ;; directory under out-dir).
-         (base-dir (or base-dir (file-name-directory org-file-name)))
-         (slug (file-name-sans-extension
-                (file-relative-name org-file-name base-dir)))
-         (keywords (make-hash-table :test 'equal)))
-
-    ;; Override ox HTML exports to produce bare-minimum HTML contents.
-    (advice-add
-     #'org-html-template :override
-     (lambda (contents _i) (setq html contents)))
-
-    (advice-add
-     #'org-html-keyword :before
-     (lambda (keyword _c _i)
-       (puthash (downcase (org-element-property :key keyword))
-                (org-element-property :value keyword)
-                keywords)))
-
-    (with-temp-buffer
-      (insert-file-contents org-file-name)
-      (org-html-export-as-html))
-
-    ;; Store HTML in keywords for easy access.
-    (puthash "content" html keywords)
-
-    (make-orgify-page
-     :slug slug
-     :html html
-     :layout (and (gethash "layout" keywords)
-                  (expand-file-name (gethash "layout" keywords) base-dir))
-     :keywords keywords)))
-
-;; Template language
 (defvar-local orgify--substitution-regexp
     (rx "{{"
         (zero-or-more blank)
@@ -202,6 +137,74 @@ keywords."
                  (dolist (v l)
                    (push v expressions)))))))
     (reverse expressions)))
+
+;;;; Orgify structures and file parsing
+
+(defvar-local orgify--default-template
+    "<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"UTF-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+  <meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\">
+  <title>my cool Orgify site</title>
+  <link rel=\"stylesheet\" href=\"https://cdn.simplecss.org/simple.min.css\">
+  <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\">
+</head>
+<body>
+  {{ content }}
+</body>
+</html>"
+  "Layout template with handlebar expressions used by `orgify-build'.")
+
+(cl-defstruct orgify-page slug html layout keywords)
+
+;; This function stores the converted HTML and HTML layout as strings
+;; on the page struct. This may prove to be inefficient, so it's
+;; likely the actual HTML data will be moved elsewhere in the
+;; future.
+(defun orgify--build-page (org-file-name &optional base-dir)
+  "Create an `orgify-page' from ORG-FILE-NAME.
+
+Parses org content from ORG-FILE-NAME to HTML via ox-html.  Org
+file keywords are accesible via `orgify-page-keywords'.
+
+BASE-DIR is an optional argument that resolves filepaths relative
+to BASE-DIR rather than their default."
+  (let* (html
+         ;; Relative file name so files are in the same directory
+         ;; format as the base dir (avoid repeating the base-dir
+         ;; directory under out-dir).
+         (base-dir (or base-dir (file-name-directory org-file-name)))
+         (slug (file-name-sans-extension
+                (file-relative-name org-file-name base-dir)))
+         (keywords (make-hash-table :test 'equal)))
+
+    ;; Override ox HTML exports to produce bare-minimum HTML contents.
+    (advice-add
+     #'org-html-template :override
+     (lambda (contents _i) (setq html contents)))
+
+    (advice-add
+     #'org-html-keyword :before
+     (lambda (keyword _c _i)
+       (puthash (downcase (org-element-property :key keyword))
+                (org-element-property :value keyword)
+                keywords)))
+
+    (with-temp-buffer
+      (insert-file-contents org-file-name)
+      (org-html-export-as-html))
+
+    ;; Store HTML in keywords for easy access.
+    (puthash "content" html keywords)
+
+    (make-orgify-page
+     :slug slug
+     :html html
+     :layout (and (gethash "layout" keywords)
+                  (expand-file-name (gethash "layout" keywords) base-dir))
+     :keywords keywords)))
 
 (defun orgify--templatize-page (page)
   "Return expressions needed for evaluating PAGE."

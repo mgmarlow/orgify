@@ -3,6 +3,10 @@
 (require 'orgify)
 
 ;; Template engine tests
+
+;; TODO: Introduce non-fixture tests
+
+;; Fixture tests:
 (defmacro with-simple-template (&rest body)
   `(with-temp-buffer
     (insert-file-contents "test/simple-template.html")
