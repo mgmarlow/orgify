@@ -51,11 +51,11 @@
 (defvar-local orgify--each-end-regexp
     (rx "/each" (zero-or-more nonl)))
 
-(defun safe-trim (str)
+(defun orgify-safe-trim (str)
   "Trim STR while preserving match data."
   (save-match-data (string-trim str)))
 
-(defun lastcar (l)
+(defun orgify-lastcar (l)
   "Get last element of L."
   (car (cdr l)))
 
@@ -71,7 +71,7 @@ If BUFFER is not nil, use that buffer instead."
       (while (< (point) (buffer-size buffer))
         (cond ((looking-at orgify--substitution-regexp)
                (purge-text)
-               (push (list 'sub (safe-trim (match-string 0))) tokens)
+               (push (list 'sub (orgify-safe-trim (match-string 0))) tokens)
                (goto-char (1- (match-end 0))))
               ((looking-at orgify--each-begin-regexp)
                (purge-text)
@@ -96,15 +96,15 @@ CUR instead."
       (while (< cur (length tokens))
         (let ((token (nth cur tokens)))
           (cond ((eq 'text (car token))
-                 (push (list 'text (lastcar token)) root))
+                 (push (list 'text (orgify-lastcar token)) root))
                 ((eq 'sub (car token))
-                 (push (list 'sub (nth 1 (split-string (lastcar token) " ")))
+                 (push (list 'sub (nth 1 (split-string (orgify-lastcar token) " ")))
                        root))
                 ((eq 'each-begin (car token))
                  (let ((subtree (orgify--parse tokens (1+ cur))))
                    (push (list 'loop
-                               (nth 1 (split-string (lastcar token) " "))
-                               (nth 3 (split-string (lastcar token) " "))
+                               (nth 1 (split-string (orgify-lastcar token) " "))
+                               (nth 3 (split-string (orgify-lastcar token) " "))
                                (car subtree))
                          root)
                    (setq cur (cdr subtree))))
@@ -123,9 +123,9 @@ keywords."
   (let ((expressions '()))
     (dolist (val ast)
       (cond ((eq 'text (car val))
-             (push `(insert ,(lastcar val)) expressions))
+             (push `(insert ,(orgify-lastcar val)) expressions))
             ((eq 'sub (car val))
-             (push `(insert ,(gethash (lastcar val) keywords)) expressions))
+             (push `(insert ,(gethash (orgify-lastcar val) keywords)) expressions))
             ((eq 'loop (car val))
              (let ((subtree '()))
                (dolist (iter (gethash (nth 2 val) keywords))
