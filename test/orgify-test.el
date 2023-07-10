@@ -2,18 +2,123 @@
 (require 'ert)
 (require 'orgify)
 
-;; Template engine tests
+;;;; Template engine tests
 
-;; TODO: Introduce non-fixture tests
+;;; Tokenizer
 
-;; Fixture tests:
+(ert-deftest test-orgify--tokenize-substitutions ()
+  (should (equal '((sub "{{ contents }}"))
+                 (with-temp-buffer
+                   (insert "{{ contents }}")
+                   (goto-char 1)
+                   (orgify--tokenize))))
+  (should (equal '((sub "{{contents}}"))
+                 (with-temp-buffer
+                   (insert "{{contents}}")
+                   (goto-char 1)
+                   (orgify--tokenize)))))
+
+(ert-deftest test-does-not-tokenize-single-braces ()
+  (should (equal '((text "{ contents }"))
+                 (with-temp-buffer
+                   (insert "{ contents }\n")
+                   (goto-char 1)
+                   (orgify--tokenize)))))
+
+(ert-deftest test-substitution-missing-ending-brace ()
+  (should (equal '((text "{{ contents"))
+                 (with-temp-buffer
+                   (insert "{{ contents\n")
+                   (goto-char 1)
+                   (orgify--tokenize)))))
+
+(ert-deftest test-orgify--tokenize-loops ()
+  (should (equal '((each-begin "#each foo in foobar")
+                   (text "\n")
+                   (sub "{{ foo }}")
+                   (text "\n")
+                   (each-end "/each"))
+                 (with-temp-buffer
+                   (insert "#each foo in foobar\n{{ foo }}\n/each")
+                   (goto-char 1)
+                   (orgify--tokenize)))))
+
+;; TODO: Probably need a nice error for this during parsing:
+(ert-deftest test-does-not-tokenize-loops-on-same-line ()
+  (should (equal '((each-begin "#each foo in foobar {{ foo }} /each"))
+                 (with-temp-buffer
+                   (insert "#each foo in foobar {{ foo }} /each")
+                   (goto-char 1)
+                   (orgify--tokenize)))))
+
+(ert-deftest test-orgify--tokenize-text ()
+  (should (equal '((text "foobar"))
+                 (with-temp-buffer
+                   (insert "foobar\n")
+                   (goto-char 1)
+                   (orgify--tokenize)))))
+
+;; TODO: Bug (missing ending char)
+(ert-deftest test-tokenize-truncates-ending-newlines-but-not-characters ()
+  (should (equal '((text "fooba"))
+                 (with-temp-buffer
+                   (insert "foobar")
+                   (goto-char 1)
+                   (orgify--tokenize)))))
+
+;;; Parser
+
+(ert-deftest test-parsing-text ()
+  (should (equal '((text "foobar"))
+                 (orgify--parse '((text "foobar"))))))
+
+(ert-deftest test-parsing-substitutions ()
+  (should (equal '((sub "foobar"))
+                 (orgify--parse '((sub "{{ foobar }}"))))))
+
+;; TODO: fix white-space significance
+;; (ert-deftest test-parsing-substitutions ()
+;;   (should (equal '((sub "foobar"))
+;;                  (orgify--parse '((sub "{{foobar}}"))))))
+
+(ert-deftest test-parsing-loops ()
+  (should (equal '((loop "foo" "foobar" ((text "\n")
+                                         (sub "foo")
+                                         (text "\n"))))
+                 (orgify--parse '((each-begin "#each foo in foobar")
+                                  (text "\n")
+                                  (sub "{{ foo }}")
+                                  (text "\n")
+                                  (each-end "\end"))))))
+
+;; TODO: Need error handling
+;; (ert-deftest test-parsing-loops-missing-end ()
+;;   (should (equal '((loop "foo" "foobar" ((text "\n")
+;;                                          (sub "foo")
+;;                                          (text "\n"))))
+;;                  (orgify--parse '((each-begin "#each foo in foobar")
+;;                                   (text "\n")
+;;                                   (sub "{{ foo }}")
+;;                                   (text "\n"))))))
+
+;; TODO: Need error handling
+;; (ert-deftest test-parsing-loops-on-same-line ()
+;;   (should (equal '((loop "foo" "foobar" ((text "\n")
+;;                                          (sub "foo")
+;;                                          (text "\n"))))
+;;                  (orgify--parse '((each-begin "#each foo in foobar {{ foo }} /each"))))))
+
+;;; Codgen
+
+;;; Fixture tests
+
 (defmacro with-simple-template (&rest body)
   `(with-temp-buffer
     (insert-file-contents "test/simple-template.html")
     (goto-char (point-min))
     ,@body))
 
-(ert-deftest test-orgify--tokenize ()
+(ert-deftest fixture-test-orgify--tokenize ()
   (should (equal '((text "<p>Hello ")
 	           (sub "{{ name }}")
                    (text "!</p>\n\n<ul>\n  ")
@@ -25,7 +130,7 @@
 	           (text "\n</ul>"))
           (with-simple-template (orgify--tokenize)))))
 
-(ert-deftest test-orgify--parse ()
+(ert-deftest fixture-test-orgify--parse ()
   (should (equal '((text "<p>Hello ")
 	           (sub "name")
 	           (text "!</p>\n\n<ul>\n  ")
@@ -35,7 +140,7 @@
 	           (text "\n</ul>"))
                  (orgify--parse (with-simple-template (orgify--tokenize))))))
 
-(ert-deftest test-orgify--generate-code ()
+(ert-deftest fixture-test-orgify--generate-code ()
   (let ((keywords (make-hash-table :test 'equal)))
     (puthash "name" "world" keywords)
     (puthash "pages" '("page-one" "page-two") keywords)
@@ -59,7 +164,7 @@
              (should (equal v (nth i got))))))
 
 ;; This test is pretty ugly, should clean this up.
-(ert-deftest test-orgify--templatize-page ()
+(ert-deftest fixture-test-orgify--templatize-page ()
   (let ((keywords (make-hash-table :test 'equal)))
     (puthash "name" "world" keywords)
     (puthash "pages" '("page-one" "page-two") keywords)
@@ -77,7 +182,8 @@
                  (eval expr))
                (buffer-string))))))
 
-;; Page struct
+;;;; Orgify tests
+
 (ert-deftest test-orgify--build-page ()
   (let ((page (orgify--build-page "test/simple-page.org")))
     (should (string= "simple-page" (orgify-page-slug page)))
