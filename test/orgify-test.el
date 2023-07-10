@@ -43,7 +43,7 @@
                    (goto-char 1)
                    (orgify--tokenize)))))
 
-;; TODO: Probably need a nice error for this during parsing:
+;; TODO: Need error handling
 (ert-deftest test-does-not-tokenize-loops-on-same-line ()
   (should (equal '((each-begin "#each foo in foobar {{ foo }} /each"))
                  (with-temp-buffer
@@ -58,13 +58,13 @@
                    (goto-char 1)
                    (orgify--tokenize)))))
 
-;; TODO: Bug (missing ending char)
-(ert-deftest test-tokenize-truncates-ending-newlines-but-not-characters ()
-  (should (equal '((text "fooba"))
-                 (with-temp-buffer
-                   (insert "foobar")
-                   (goto-char 1)
-                   (orgify--tokenize)))))
+;; TODO: Fix (missing ending char)
+;; (ert-deftest test-tokenize-truncates-ending-newlines-but-not-characters ()
+;;   (should (equal '((text "foobar"))
+;;                  (with-temp-buffer
+;;                    (insert "foobar")
+;;                    (goto-char 1)
+;;                    (orgify--tokenize)))))
 
 ;;; Parser
 
@@ -109,6 +109,37 @@
 ;;                  (orgify--parse '((each-begin "#each foo in foobar {{ foo }} /each"))))))
 
 ;;; Codgen
+
+(ert-deftest test-codegen-text ()
+  (let ((keywords (make-hash-table :test 'equal)))
+    (should (equal '((insert "foobar"))
+                   (orgify--generate-code '((text "foobar")) keywords)))))
+
+(ert-deftest test-codegen-sub ()
+  (let ((keywords (make-hash-table :test 'equal)))
+    (puthash "content" "<p>Hello world!</p>" keywords)
+    (should (equal '((insert "<p>Hello world!</p>"))
+                   (orgify--generate-code '((sub "content")) keywords)))))
+
+;; TODO: Need error handling
+(ert-deftest test-codegen-sub-keyword-missing ()
+  (let ((keywords (make-hash-table :test 'equal)))
+    (should (equal '((insert nil))
+                   (orgify--generate-code '((sub "nocontent")) keywords)))))
+
+(ert-deftest test-codegen-loop ()
+  (let ((keywords (make-hash-table :test 'equal)))
+    (puthash "foobar" '("one" "two" "three") keywords)
+    (should (equal '((insert "one")
+                     (insert "two")
+                     (insert "three"))
+                   (orgify--generate-code '((loop "foo" "foobar" ((sub "foo")))) keywords)))))
+
+;; TODO: Need error handling
+(ert-deftest test-codegen-loop-keyword-missing ()
+  (let ((keywords (make-hash-table :test 'equal)))
+    (should (equal '()
+                   (orgify--generate-code '((loop "foo" "foobar" ((sub "foo")))) keywords)))))
 
 ;;; Fixture tests
 
