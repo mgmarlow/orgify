@@ -2,7 +2,7 @@ EMACS := emacs -Q
 
 LOADPATH := -L .
 
-PACKAGE_FILES := $(filter-out $(wildcard *-test.el), $(wildcard *.el))
+PACKAGE_FILES := $(filter-out build-docs.el $(wildcard *-test.el), $(wildcard *.el))
 
 TEST_FILES := $(wildcard test/*-test.el)
 
