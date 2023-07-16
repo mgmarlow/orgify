@@ -71,59 +71,52 @@
       (purge-text))
     (reverse tokens)))
 
-;; TODO: Just codegen here
 (defun orgify--parse (tokens &optional start end)
+  "Parse TOKENS into elisp expressions.
+
+START and END optionally restrict parsing to particular indices
+in TOKENS.  This is primarily used for recursively descending
+through sub-expressions (like in #each).
+
+The final expression tree is built into a lambda function that
+takes a single env argument.  Right now, env is expected to be a
+hash-table containing the page data/keywords.  Both the
+substitution code and the looping code are coupled to hash-table
+methods, which makes the final tree inflexible to arbitrary
+expressions.  Instead, substitutions should call `eval', allowing
+for any valid Emacs Lisp code for leaf nodes."
   (let (root (cur (or start 0)))
     (while (< cur (or end (length tokens)))
       (let ((token (nth cur tokens)))
-        (cond ((or (eq 'text (car token))
-                   (eq 'sub (car token)))
-               (push token root))
+        (cond ((eq 'text (car token))
+               (push `(insert ,(orgify-lastcar token)) root))
+              ((eq 'sub (car token))
+               ;; TODO: allow for arbitrary expressions w/ `eval'.
+               (push `(insert (gethash ,(orgify-lastcar token) env)) root))
               ((eq 'each-begin (car token))
                (let ((istart (1+ cur)) (iend (1+ cur)))
                  (while (not (eq 'each-end (car (nth iend tokens))))
                    (when (> iend (length tokens))
                      (error "Missing end-each token"))
                    (cl-incf iend))
-                 (push (list 'loop
-                             (nth 1 (split-string (orgify-lastcar token) " "))
-                             (nth 3 (split-string (orgify-lastcar token) " "))
-                             (orgify--parse tokens istart iend))
-                       root)
+                 (let ((item (nth 1 (split-string (orgify-lastcar token) " ")))
+                       (collection (nth 3 (split-string (orgify-lastcar token) " "))))
+                   (push `(cl-loop
+                           for iter in (gethash ,collection env)
+                           do (progn
+                                ;; This puthash is ugly! Instead, leaf
+                                ;; nodes should be eval expressions so
+                                ;; iter can just be passed through.
+                                (puthash ,item iter env)
+                                (,(orgify--parse tokens istart iend) env)))
+                         root))
                  (setq cur iend)))))
       (setq cur (1+ cur)))
-    (reverse root)))
-
-(defun orgify--generate-code (ast env)
-  "Generate code from AST, prepared for `eval'.
-
-ENV is an alist of the org file environment."
-  (let ((expressions '()))
-    (dolist (val ast)
-      (cond ((eq 'text (car val))
-             (push `(insert ,(orgify-lastcar val)) expressions))
-            ((eq 'sub (car val))
-             (push `(insert ,(gethash (orgify-lastcar val) env)) expressions))
-            ((eq 'loop (car val))
-             (let ((subtree '()))
-               (dolist (iter (gethash (nth 2 val) env))
-                 (puthash (nth 1 val) iter env)
-                 (push (orgify--generate-code (nth 3 val) env) subtree))
-               ;; Unwind subtree for proper order and a flattened list
-               ;; of expressions. There's probably an easier way.
-               (dolist (l (reverse subtree))
-                 (dolist (v l)
-                   (push v expressions)))))))
-    (reverse expressions)))
-
-(defun orgify--execute (parsed)
-  (dolist (expr parsed)
-    (eval expr)))
+    `(lambda (env) ,@(reverse root))))
 
 (defun orgify--compile-and-exec (input env)
-  (orgify--execute
-   (orgify--generate-code
-    (orgify--parse (orgify--tokenize input))
-    env)))
+  (funcall
+   (orgify--parse (orgify--tokenize input))
+   env))
 
 (provide 'orgify-compiler)

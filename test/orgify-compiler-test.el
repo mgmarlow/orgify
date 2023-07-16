@@ -47,57 +47,29 @@
 ;;; Parser
 
 (ert-deftest test-parsing-text ()
-  (should (equal '((text "foobar")) (orgify--parse '((text "foobar"))))))
+  (should (equal '(lambda (env) (insert "foobar")) (orgify--parse '((text "foobar"))))))
 
 (ert-deftest test-parsing-substitutions ()
-  (should (equal '((sub "foobar")) (orgify--parse '((sub "foobar"))))))
+  (should (equal '(lambda (env) (insert (gethash "foobar" env))) (orgify--parse '((sub "foobar"))))))
 
 (ert-deftest test-parsing-loops ()
-  (should (equal '((loop "foo" "foobar" ((text "\n")
-                                         (sub "foo")
-                                         (text "\n"))))
+  (should (equal '(lambda (env) (cl-loop for iter in (gethash "foobar" env)
+                                         do (progn
+                                              (puthash "foo" iter env)
+                                              ((lambda (env)
+                                                 (insert "\n")
+                                                 (insert (gethash "foo" env))
+                                                 (insert "\n"))
+                                               env))))
                  (orgify--parse '((each-begin "#each foo in foobar")
                                   (text "\n")
                                   (sub "foo")
                                   (text "\n")
                                   (each-end "\end"))))))
 
-;;; Codgen
-
-(ert-deftest test-codegen-text ()
-  (let ((keywords (make-hash-table :test 'equal)))
-    (should (equal '((insert "foobar"))
-                   (orgify--generate-code '((text "foobar")) keywords)))))
-
-(ert-deftest test-codegen-sub ()
-  (let ((keywords (make-hash-table :test 'equal)))
-    (puthash "content" "<p>Hello world!</p>" keywords)
-    (should (equal '((insert "<p>Hello world!</p>"))
-                   (orgify--generate-code '((sub "content")) keywords)))))
-
-;; TODO: Need error handling
-(ert-deftest test-codegen-sub-keyword-missing ()
-  :expected-result :failed
-  (let ((keywords (make-hash-table :test 'equal)))
-    (should-error (orgify--generate-code '((sub "nocontent")) keywords))))
-
-(ert-deftest test-codegen-loop ()
-  (let ((keywords (make-hash-table :test 'equal)))
-    (puthash "foobar" '("one" "two" "three") keywords)
-    (should (equal '((insert "one")
-                     (insert "two")
-                     (insert "three"))
-                   (orgify--generate-code '((loop "foo" "foobar" ((sub "foo")))) keywords)))))
-
-;; TODO: Need error handling
-(ert-deftest test-codegen-loop-keyword-missing ()
-  :expected-result :failed
-  (let ((keywords (make-hash-table :test 'equal)))
-    (should-error (orgify--generate-code '((loop "foo" "foobar" ((sub "foo")))) keywords))))
-
 ;;; Fixture tests
 
-(defmacro simple-template ()
+(defun simple-template ()
   (with-temp-buffer
     (insert-file-contents "test/fixtures/simple-template.html")
     (buffer-string)))
