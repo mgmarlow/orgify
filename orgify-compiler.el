@@ -21,41 +21,50 @@
 (defvar-local orgify--each-end-regexp
     (rx "/each" (zero-or-more nonl)))
 
-(defun orgify-safe-trim (str)
-  "Trim STR while preserving match data."
-  (save-match-data (string-trim str)))
-
 (defun orgify-lastcar (l)
   "Get last element of L."
   (car (cdr l)))
 
-(defun orgify--tokenize (&optional buffer)
-  "Break current buffer contents into a list of tokens.
+(defun orgify--extract-sub (source)
+  "Extract substitution variable from SOURCE."
+  (save-match-data
+    (string-trim (substring source 2 (- (length source) 2)))))
 
-If BUFFER is not nil, use that buffer instead."
-  (let ((tokens '()) (cur-text ""))
+(defun orgify--tokenize (input)
+  "Return tokens from INPUT."
+  (let ((tokens '()) (cur-text "") (idx 0))
     (cl-flet ((purge-text ()
                 (when (> (length cur-text) 0)
                   (push (list 'text cur-text) tokens)
                   (setq cur-text ""))))
-      (while (< (point) (buffer-size buffer))
-        (cond ((looking-at orgify--substitution-regexp)
+      (while (< idx (length input))
+        ;; Need to use (eq ... idx) to ensure regex is matching from
+        ;; idx onwards. `string-start' in the regexp itself doesn't
+        ;; work as I would expect, seemingly always matching the
+        ;; entirety of input.
+        (cond ((eq (string-match orgify--substitution-regexp input idx) idx)
                (purge-text)
-               (push (list 'sub (orgify-safe-trim (match-string 0))) tokens)
-               (goto-char (1- (match-end 0))))
-              ((looking-at orgify--each-begin-regexp)
+               (push (list 'sub (orgify--extract-sub (match-string 0 input))) tokens)
+               (setq idx (1- (match-end 0))))
+              ((eq (string-match orgify--each-begin-regexp input idx) idx)
+               ;; Expecting "#each foo in bar" only
+               (when (save-match-data
+                       (> (length (split-string (match-string 0 input))) 4))
+                 (error "Invalid loop in template: %s" (match-string 0 input)))
                (purge-text)
-               (push (list 'each-begin (match-string 0)) tokens)
-               (goto-char (1- (match-end 0))))
-              ((looking-at orgify--each-end-regexp)
+               (push (list 'each-begin (match-string 0 input)) tokens)
+               (setq idx (1- (match-end 0))))
+              ((eq (string-match orgify--each-end-regexp input idx) idx)
                (purge-text)
-               (push (list 'each-end (match-string 0)) tokens)
-               (goto-char (1- (match-end 0))))
-              (t (setq cur-text (concat cur-text (char-to-string (char-after))))))
-        (forward-char))
+               (push (list 'each-end (match-string 0 input)) tokens)
+               (setq idx (1- (match-end 0))))
+              (t
+               (setq cur-text (concat cur-text (char-to-string (aref input idx))))))
+        (cl-incf idx))
       (purge-text))
     (reverse tokens)))
 
+;; TODO: Just codegen here
 (defun orgify--parse (tokens &optional cur)
   "Parse TOKENS into an AST representing the template evaluation.
 
@@ -66,10 +75,9 @@ CUR instead."
       (while (< cur (length tokens))
         (let ((token (nth cur tokens)))
           (cond ((eq 'text (car token))
-                 (push (list 'text (orgify-lastcar token)) root))
+                 (push token root))
                 ((eq 'sub (car token))
-                 (push (list 'sub (nth 1 (split-string (orgify-lastcar token) " ")))
-                       root))
+                 (push token root))
                 ((eq 'each-begin (car token))
                  (let ((subtree (orgify--parse tokens (1+ cur))))
                    (push (list 'loop
@@ -109,9 +117,9 @@ keywords."
     (reverse expressions)))
 
 ;; TODO: Need a better interface that actually executes the code.
-(defun orgify--compile (state &optional buffer)
+(defun orgify--compile (input state)
   (orgify--generate-code
-   (orgify--parse (orgify--tokenize buffer))
+   (orgify--parse (orgify--tokenize input))
    state))
 
 (provide 'orgify-compiler)

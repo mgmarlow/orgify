@@ -106,12 +106,13 @@ to BASE-DIR rather than their default."
 
 (defun orgify--templatize-page (page)
   "Return expressions needed for evaluating PAGE."
-  (with-temp-buffer
-    (if (orgify-page-layout page)
-        (insert-file-contents (orgify-page-layout page))
-      (insert orgify--default-template))
-    (goto-char (point-min))
-    (orgify--compile (orgify-page-keywords page))))
+  (orgify--compile
+   (with-temp-buffer
+     (if (orgify-page-layout page)
+         (insert-file-contents (orgify-page-layout page))
+       (insert orgify--default-template))
+     (buffer-string))
+   (orgify-page-keywords page)))
 
 ;; Note that the layout parsing is repeated for every page, regardless
 ;; of whether or not that layout has already been read from the file
