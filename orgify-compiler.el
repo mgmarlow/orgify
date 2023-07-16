@@ -72,31 +72,25 @@
     (reverse tokens)))
 
 ;; TODO: Just codegen here
-(defun orgify--parse (tokens &optional cur)
-  "Parse TOKENS into an AST representing the template evaluation.
-
-Searches tokens beginning at index 0. If CUR is not nil, start at
-CUR instead."
-  (let (root (cur (or cur 0)))
-    (while (< cur (length tokens))
+(defun orgify--parse (tokens &optional start end)
+  (let (root (cur (or start 0)))
+    (while (< cur (or end (length tokens)))
       (let ((token (nth cur tokens)))
         (cond ((or (eq 'text (car token))
                    (eq 'sub (car token)))
                (push token root))
               ((eq 'each-begin (car token))
-               (let ((subexpr '()) (s-idx (1+ cur)))
-                 (while (not (eq 'each-end (car (nth s-idx tokens))))
-                   (unless (< s-idx (length tokens))
+               (let ((istart (1+ cur)) (iend (1+ cur)))
+                 (while (not (eq 'each-end (car (nth iend tokens))))
+                   (when (> iend (length tokens))
                      (error "Missing end-each token"))
-
-                   (push (nth s-idx tokens) subexpr)
-                   (cl-incf s-idx))
+                   (cl-incf iend))
                  (push (list 'loop
                              (nth 1 (split-string (orgify-lastcar token) " "))
                              (nth 3 (split-string (orgify-lastcar token) " "))
-                             (reverse subexpr))
+                             (orgify--parse tokens istart iend))
                        root)
-                 (setq cur s-idx)))))
+                 (setq cur iend)))))
       (setq cur (1+ cur)))
     (reverse root)))
 
