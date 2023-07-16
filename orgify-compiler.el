@@ -31,8 +31,8 @@
     (string-trim (substring source 2 (- (length source) 2)))))
 
 (defun orgify--tokenize (input)
-  "Return tokens from INPUT."
-  (let ((tokens '()) (cur-text "") (idx 0))
+  "Collects INPUT into tokens for the Orgify template language."
+  (let ((tokens '()) (cur-text "") (idx 0) expecting-each-end)
     (cl-flet ((purge-text ()
                 (when (> (length cur-text) 0)
                   (push (list 'text cur-text) tokens)
@@ -53,14 +53,21 @@
                  (error "Invalid loop in template: %s" (match-string 0 input)))
                (purge-text)
                (push (list 'each-begin (match-string 0 input)) tokens)
+               (setq expecting-each-end (match-string 0 input))
                (setq idx (1- (match-end 0))))
               ((eq (string-match orgify--each-end-regexp input idx) idx)
                (purge-text)
                (push (list 'each-end (match-string 0 input)) tokens)
+               (setq expecting-each-end nil)
                (setq idx (1- (match-end 0))))
               (t
                (setq cur-text (concat cur-text (char-to-string (aref input idx))))))
         (cl-incf idx))
+
+      ;; Failed to reach /each
+      (when expecting-each-end
+        (error "Expected end of #each: %s" expecting-each-end))
+
       (purge-text))
     (reverse tokens)))
 

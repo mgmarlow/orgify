@@ -35,15 +35,11 @@
                    (each-end "/each"))
                  (orgify--tokenize "#each foo in foobar\n{{ foo }}\n/each"))))
 
-(ert-deftest test-tokenize-loops-on-same-line ()
-  :expected-result :failed
-  (should (equal '((each-begin "#each foo in foobar")
-                   (text "\n")
-                   (sub "foo")
-                   (text "\n")
-                   (each-end "/each"))
-                 (orgify--tokenize "#each foo in foobar {{ foo }} /each"))))
+(ert-deftest test-tokenize-loop-same-line-error ()
+  (should-error (orgify--tokenize "#each foo in foobar {{ foo }} /each")))
 
+(ert-deftest test-tokenize-loop-missing-end-error ()
+  (should-error (orgify--tokenize "#each foo in foobar\n{{ foo }}")))
 
 (ert-deftest test-tokenize-multiline-text ()
   (should (equal '((text "this\nis\a\test\n")) (orgify--tokenize "this\nis\a\test\n"))))
@@ -66,23 +62,6 @@
                                   (text "\n")
                                   (each-end "\end"))))))
 
-;; TODO: Need error handling
-;; (ert-deftest test-parsing-loops-missing-end ()
-;;   (should (equal '((loop "foo" "foobar" ((text "\n")
-;;                                          (sub "foo")
-;;                                          (text "\n"))))
-;;                  (orgify--parse '((each-begin "#each foo in foobar")
-;;                                   (text "\n")
-;;                                   (sub "{{ foo }}")
-;;                                   (text "\n"))))))
-
-;; TODO: Need error handling
-;; (ert-deftest test-parsing-loops-on-same-line ()
-;;   (should (equal '((loop "foo" "foobar" ((text "\n")
-;;                                          (sub "foo")
-;;                                          (text "\n"))))
-;;                  (orgify--parse '((each-begin "#each foo in foobar {{ foo }} /each"))))))
-
 ;;; Codgen
 
 (ert-deftest test-codegen-text ()
@@ -98,9 +77,9 @@
 
 ;; TODO: Need error handling
 (ert-deftest test-codegen-sub-keyword-missing ()
+  :expected-result :failed
   (let ((keywords (make-hash-table :test 'equal)))
-    (should (equal '((insert nil))
-                   (orgify--generate-code '((sub "nocontent")) keywords)))))
+    (should-error (orgify--generate-code '((sub "nocontent")) keywords))))
 
 (ert-deftest test-codegen-loop ()
   (let ((keywords (make-hash-table :test 'equal)))
@@ -112,9 +91,9 @@
 
 ;; TODO: Need error handling
 (ert-deftest test-codegen-loop-keyword-missing ()
+  :expected-result :failed
   (let ((keywords (make-hash-table :test 'equal)))
-    (should (equal '()
-                   (orgify--generate-code '((loop "foo" "foobar" ((sub "foo")))) keywords)))))
+    (should-error (orgify--generate-code '((loop "foo" "foobar" ((sub "foo")))) keywords))))
 
 ;;; Fixture tests
 
