@@ -104,16 +104,6 @@ to BASE-DIR rather than their default."
                   (expand-file-name (gethash "layout" keywords) base-dir))
      :keywords keywords)))
 
-(defun orgify--templatize-page (page)
-  "Return expressions needed for evaluating PAGE."
-  (orgify--compile
-   (with-temp-buffer
-     (if (orgify-page-layout page)
-         (insert-file-contents (orgify-page-layout page))
-       (insert orgify--default-template))
-     (buffer-string))
-   (orgify-page-keywords page)))
-
 ;; Note that the layout parsing is repeated for every page, regardless
 ;; of whether or not that layout has already been read from the file
 ;; system. It's likely layouts will be moved to their own hash-table
@@ -128,9 +118,13 @@ content and keywords."
                       out-dir)))
     (make-empty-file destination)
     (with-temp-file destination
-      ;; Evaluate the template engine
-      (dolist (expr (orgify--templatize-page page))
-        (eval expr)))))
+      (orgify--compile-and-exec
+       (with-temp-buffer
+         (if (orgify-page-layout page)
+             (insert-file-contents (orgify-page-layout page))
+           (insert orgify--default-template))
+         (buffer-string))
+       (orgify-page-keywords page)))))
 
 (cl-defun orgify-build (&key base-dir out-dir static-dir)
   "Build org files into a static website.

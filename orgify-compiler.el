@@ -77,45 +77,44 @@
 
 Searches tokens beginning at index 0. If CUR is not nil, start at
 CUR instead."
-  (cl-block parser
-    (let (root (cur (or cur 0)))
-      (while (< cur (length tokens))
-        (let ((token (nth cur tokens)))
-          (cond ((eq 'text (car token))
-                 (push token root))
-                ((eq 'sub (car token))
-                 (push token root))
-                ((eq 'each-begin (car token))
-                 (let ((subtree (orgify--parse tokens (1+ cur))))
-                   (push (list 'loop
-                               (nth 1 (split-string (orgify-lastcar token) " "))
-                               (nth 3 (split-string (orgify-lastcar token) " "))
-                               (car subtree))
-                         root)
-                   (setq cur (cdr subtree))))
-                ((eq 'each-end (car token))
-                 (cl-return-from parser (cons (reverse root) cur)))))
-        (setq cur (1+ cur)))
-      (reverse root))))
+  (let (root (cur (or cur 0)))
+    (while (< cur (length tokens))
+      (let ((token (nth cur tokens)))
+        (cond ((or (eq 'text (car token))
+                   (eq 'sub (car token)))
+               (push token root))
+              ((eq 'each-begin (car token))
+               (let ((subexpr '()) (s-idx (1+ cur)))
+                 (while (not (eq 'each-end (car (nth s-idx tokens))))
+                   (unless (< s-idx (length tokens))
+                     (error "Missing end-each token"))
 
-(defun orgify--generate-code (ast keywords)
+                   (push (nth s-idx tokens) subexpr)
+                   (cl-incf s-idx))
+                 (push (list 'loop
+                             (nth 1 (split-string (orgify-lastcar token) " "))
+                             (nth 3 (split-string (orgify-lastcar token) " "))
+                             (reverse subexpr))
+                       root)
+                 (setq cur s-idx)))))
+      (setq cur (1+ cur)))
+    (reverse root)))
+
+(defun orgify--generate-code (ast env)
   "Generate code from AST, prepared for `eval'.
 
-KEYWORDS is a hash-table of org file keywords.
-
-COLLECTIONS is a hash-table of collection names to org file
-keywords."
+ENV is an alist of the org file environment."
   (let ((expressions '()))
     (dolist (val ast)
       (cond ((eq 'text (car val))
              (push `(insert ,(orgify-lastcar val)) expressions))
             ((eq 'sub (car val))
-             (push `(insert ,(gethash (orgify-lastcar val) keywords)) expressions))
+             (push `(insert ,(gethash (orgify-lastcar val) env)) expressions))
             ((eq 'loop (car val))
              (let ((subtree '()))
-               (dolist (iter (gethash (nth 2 val) keywords))
-                 (puthash (nth 1 val) iter keywords)
-                 (push (orgify--generate-code (nth 3 val) keywords) subtree))
+               (dolist (iter (gethash (nth 2 val) env))
+                 (puthash (nth 1 val) iter env)
+                 (push (orgify--generate-code (nth 3 val) env) subtree))
                ;; Unwind subtree for proper order and a flattened list
                ;; of expressions. There's probably an easier way.
                (dolist (l (reverse subtree))
@@ -123,10 +122,14 @@ keywords."
                    (push v expressions)))))))
     (reverse expressions)))
 
-;; TODO: Need a better interface that actually executes the code.
-(defun orgify--compile (input state)
-  (orgify--generate-code
-   (orgify--parse (orgify--tokenize input))
-   state))
+(defun orgify--execute (parsed)
+  (dolist (expr parsed)
+    (eval expr)))
+
+(defun orgify--compile-and-exec (input env)
+  (orgify--execute
+   (orgify--generate-code
+    (orgify--parse (orgify--tokenize input))
+    env)))
 
 (provide 'orgify-compiler)

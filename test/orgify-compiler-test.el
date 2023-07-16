@@ -103,24 +103,17 @@
     (buffer-string)))
 
 (ert-deftest test-simple-template-fixture ()
-  (let ((keywords (make-hash-table :test 'equal)))
-    (puthash "name" "world" keywords)
-    (puthash "pages" '("page-one" "page-two") keywords)
+  (let ((env (make-hash-table :test 'equal))
+        (input (with-temp-buffer
+                 (insert-file-contents "fixtures/simple-template.html")
+                 (buffer-string))))
+    (puthash "name" "world" env)
+    (puthash "pages" '("page-one" "page-two") env)
 
-    (setq got (orgify--generate-code
-                    (orgify--parse (orgify--tokenize (simple-template)))
-                    keywords))
+    (should
+     (equal
+      "<p>Hello world!</p>\n\n<ul>\n  \n  <li>\n    page-one\n  </li>\n  \n  <li>\n    page-two\n  </li>\n  \n</ul>\n"
+      (with-temp-buffer
+        (orgify--compile-and-exec input env)
+        (buffer-string))))))
 
-    (cl-loop for v in '((insert "<p>Hello ")
-                        (insert "world")
-                        (insert "!</p>\n\n<ul>\n  ")
-                        (insert "\n  <li>\n    ")
-                        (insert "page-one")
-                        (insert "\n  </li>\n  ")
-                        (insert "\n  <li>\n    ")
-                        (insert "page-two")
-                        (insert "\n  </li>\n  ")
-                        (insert "\n</ul>\n"))
-             for i from 0
-             do
-             (should (equal v (nth i got))))))
