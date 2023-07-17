@@ -4,36 +4,36 @@
 
 ;;; Tokenizer
 
-(ert-deftest test-tokenize-subs ()
-  (should (equal '((sub "contents")) (orgify--tokenize "{{ contents }}")))
-  (should (equal '((sub "contents")) (orgify--tokenize "{{contents}}")))
-  (should (equal '((sub "contents")) (orgify--tokenize "{{ contents}}")))
-  (should (equal '((sub "contents")) (orgify--tokenize "{{contents }}"))))
+(ert-deftest test-tokenize-exprs ()
+  (should (equal '((expr "contents")) (orgify--tokenize "{{ contents }}")))
+  (should (equal '((expr "contents")) (orgify--tokenize "{{contents}}")))
+  (should (equal '((expr "contents")) (orgify--tokenize "{{ contents}}")))
+  (should (equal '((expr "contents")) (orgify--tokenize "{{contents }}"))))
 
-(ert-deftest test-tokenize-two-subs ()
-  (should (equal '((sub "foo") (sub "bar")) (orgify--tokenize "{{ foo }}{{ bar }}"))))
+(ert-deftest test-tokenize-two-exprs ()
+  (should (equal '((expr "foo") (expr "bar")) (orgify--tokenize "{{ foo }}{{ bar }}"))))
 
-(ert-deftest test-tokenize-subs-with-surrounding-text ()
-  (should (equal '((text "foo") (sub "contents") (text "bar")) (orgify--tokenize "foo{{ contents }}bar")))
-  (should (equal '((text "foo") (sub "contents")) (orgify--tokenize "foo{{ contents }}")))
-  (should (equal '((sub "contents") (text "bar")) (orgify--tokenize "{{ contents }}bar"))))
+(ert-deftest test-tokenize-exprs-with-surrounding-text ()
+  (should (equal '((text "foo") (expr "contents") (text "bar")) (orgify--tokenize "foo{{ contents }}bar")))
+  (should (equal '((text "foo") (expr "contents")) (orgify--tokenize "foo{{ contents }}")))
+  (should (equal '((expr "contents") (text "bar")) (orgify--tokenize "{{ contents }}bar"))))
 
-(ert-deftest test-tokenize-subs-with-newlines ()
+(ert-deftest test-tokenize-exprs-with-newlines ()
   (should (equal '((text "{{\ncontents\n}}")) (orgify--tokenize "{{\ncontents\n}}"))))
 
-(ert-deftest test-tokenize-subs-with-single-brace ()
+(ert-deftest test-tokenize-exprs-with-single-brace ()
   (should (equal '((text "{ contents }")) (orgify--tokenize "{ contents }"))))
 
-(ert-deftest test-tokenize-subs-with-missing-end-brace ()
+(ert-deftest test-tokenize-exprs-with-missing-end-brace ()
   (should (equal '((text "{{ contents")) (orgify--tokenize "{{ contents"))))
 
-(ert-deftest test-tokenize-subs-with-missing-beginning-brace ()
+(ert-deftest test-tokenize-exprs-with-missing-beginning-brace ()
   (should (equal '((text "contents }}")) (orgify--tokenize "contents }}"))))
 
 (ert-deftest test-tokenize-loops ()
   (should (equal '((each-begin "#each foo in foobar")
                    (text "\n")
-                   (sub "foo")
+                   (expr "foo")
                    (text "\n")
                    (each-end "/each"))
                  (orgify--tokenize "#each foo in foobar\n{{ foo }}\n/each"))))
@@ -53,10 +53,10 @@
   (should (equal '(lambda (env) (insert "foobar")) (orgify--parse '((text "foobar"))))))
 
 (ert-deftest test-parsing-expr ()
-  (should (equal '(lambda (env) (insert (orgify--eval-string "(+ 1 3)" env))) (orgify--parse '((sub "(+ 1 3)"))))))
+  (should (equal '(lambda (env) (insert (orgify--eval-string "(+ 1 3)" env))) (orgify--parse '((expr "(+ 1 3)"))))))
 
 (ert-deftest test-parsing-substitutions ()
-  (should (equal '(lambda (env) (insert (orgify--eval-string "foobar" env))) (orgify--parse '((sub "foobar"))))))
+  (should (equal '(lambda (env) (insert (orgify--eval-string "foobar" env))) (orgify--parse '((expr "foobar"))))))
 
 (ert-deftest test-parsing-loops ()
   (should (equal '(lambda (env) (cl-loop for iter in (alist-get 'foobar env)
@@ -69,7 +69,7 @@
                                                env))))
                  (orgify--parse '((each-begin "#each foo in foobar")
                                   (text "\n")
-                                  (sub "foo")
+                                  (expr "foo")
                                   (text "\n")
                                   (each-end "\end"))))))
 

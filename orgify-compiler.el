@@ -44,7 +44,7 @@
         ;; entirety of input.
         (cond ((eq (string-match orgify--substitution-regexp input idx) idx)
                (purge-text)
-               (push `(sub ,(orgify--extract-sub (match-string 0 input))) tokens)
+               (push `(expr ,(orgify--extract-sub (match-string 0 input))) tokens)
                (setq idx (1- (match-end 0))))
               ((eq (string-match orgify--each-begin-regexp input idx) idx)
                ;; Expecting "#each foo in bar" only
@@ -86,21 +86,13 @@ expressions."
 
 START and END optionally restrict parsing to particular indices
 in TOKENS.  This is primarily used for recursively descending
-through sub-expressions (like in #each).
-
-The final expression tree is built into a lambda function that
-takes a single env argument.  Right now, env is expected to be a
-hash-table containing the page data/keywords.  Both the
-substitution code and the looping code are coupled to hash-table
-methods, which makes the final tree inflexible to arbitrary
-expressions.  Instead, substitutions should call `eval', allowing
-for any valid Emacs Lisp code for leaf nodes."
+through sub-expressions (like in #each)."
   (let (root (cur (or start 0)))
     (while (< cur (or end (length tokens)))
       (let ((token (nth cur tokens)))
         (cond ((eq 'text (car token))
                (push `(insert ,(orgify-lastcar token)) root))
-              ((eq 'sub (car token))
+              ((eq 'expr (car token))
                (push `(insert (orgify--eval-string ,(orgify-lastcar token) env)) root))
               ((eq 'each-begin (car token))
                (let ((istart (1+ cur)) (iend (1+ cur)))
@@ -121,7 +113,11 @@ for any valid Emacs Lisp code for leaf nodes."
     `(lambda (env) ,@(reverse root))))
 
 (defun orgify--compile-and-exec (input env)
-  "Compile INPUT and execute it with ENV."
+  "Compile INPUT and execute it with ENV.
+
+ENV is an alist of the containing lexical environment.  This
+alist should contain any variables required in the HTML template.
+See `eval' for more info."
   (funcall
    (orgify--parse (orgify--tokenize input))
    env))
