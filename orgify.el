@@ -76,7 +76,7 @@ to BASE-DIR rather than their default."
          (base-dir (or base-dir (file-name-directory org-file-name)))
          (slug (file-name-sans-extension
                 (file-relative-name org-file-name base-dir)))
-         (keywords (make-hash-table :test 'equal)))
+         (keywords '()))
 
     ;; Override ox HTML exports to produce bare-minimum HTML contents.
     (advice-add
@@ -86,22 +86,22 @@ to BASE-DIR rather than their default."
     (advice-add
      #'org-html-keyword :before
      (lambda (keyword _c _i)
-       (puthash (downcase (org-element-property :key keyword))
-                (org-element-property :value keyword)
-                keywords)))
+       (push (cons (intern-soft (downcase (org-element-property :key keyword)))
+                   (org-element-property :value keyword))
+             keywords)))
 
     (with-temp-buffer
       (insert-file-contents org-file-name)
       (org-html-export-as-html))
 
     ;; Store HTML in keywords for easy access.
-    (puthash "content" html keywords)
+    (push (cons 'content html) keywords)
 
     (make-orgify-page
      :slug slug
      :html html
-     :layout (and (gethash "layout" keywords)
-                  (expand-file-name (gethash "layout" keywords) base-dir))
+     :layout (and (alist-get 'layout keywords)
+                  (expand-file-name (alist-get 'layout keywords) base-dir))
      :keywords keywords)))
 
 ;; Note that the layout parsing is repeated for every page, regardless

@@ -14,7 +14,7 @@ install:
 	npm install wrangler --global
 
 test: compile
-	$(EMACS) -batch $(LOADPATH) -l ert -l $(TEST_FILES) -f ert-run-tests-batch-and-exit
+	$(EMACS) -batch $(LOADPATH) -l ert $(foreach file,$(TEST_FILES), -l $(file)) -f ert-run-tests-batch-and-exit
 
 compile: clean
 	$(EMACS) -batch $(LOADPATH) -f batch-byte-compile $(PACKAGE_FILES)

@@ -11,7 +11,7 @@
 (defvar-local orgify--substitution-regexp
     (rx "{{"
         (zero-or-more blank)
-        (zero-or-more nonl)
+        (*? nonl)
         (zero-or-more blank)
         "}}"))
 
@@ -44,7 +44,7 @@
         ;; entirety of input.
         (cond ((eq (string-match orgify--substitution-regexp input idx) idx)
                (purge-text)
-               (push (list 'sub (orgify--extract-sub (match-string 0 input))) tokens)
+               (push `(sub ,(orgify--extract-sub (match-string 0 input))) tokens)
                (setq idx (1- (match-end 0))))
               ((eq (string-match orgify--each-begin-regexp input idx) idx)
                ;; Expecting "#each foo in bar" only
@@ -52,12 +52,12 @@
                        (> (length (split-string (match-string 0 input))) 4))
                  (error "Invalid loop in template: %s" (match-string 0 input)))
                (purge-text)
-               (push (list 'each-begin (match-string 0 input)) tokens)
+               (push `(each-begin ,(match-string 0 input)) tokens)
                (setq expecting-each-end (match-string 0 input))
                (setq idx (1- (match-end 0))))
               ((eq (string-match orgify--each-end-regexp input idx) idx)
                (purge-text)
-               (push (list 'each-end (match-string 0 input)) tokens)
+               (push `(each-end ,(match-string 0 input)) tokens)
                (setq expecting-each-end nil)
                (setq idx (1- (match-end 0))))
               (t
@@ -70,6 +70,16 @@
 
       (purge-text))
     (reverse tokens)))
+
+(defun orgify--eval-string (string env)
+  "Evaluate elisp code stored in STRING.
+
+ENV brings the outer lexical environment into the scope of the
+`eval', allowing variables from org files to be exposed to
+expressions."
+  (let ((result (eval (car (read-from-string string)) env)))
+    (cond ((numberp result) (number-to-string result))
+          (t result))))
 
 (defun orgify--parse (tokens &optional start end)
   "Parse TOKENS into elisp expressions.
@@ -91,8 +101,7 @@ for any valid Emacs Lisp code for leaf nodes."
         (cond ((eq 'text (car token))
                (push `(insert ,(orgify-lastcar token)) root))
               ((eq 'sub (car token))
-               ;; TODO: allow for arbitrary expressions w/ `eval'.
-               (push `(insert (gethash ,(orgify-lastcar token) env)) root))
+               (push `(insert (orgify--eval-string ,(orgify-lastcar token) env)) root))
               ((eq 'each-begin (car token))
                (let ((istart (1+ cur)) (iend (1+ cur)))
                  (while (not (eq 'each-end (car (nth iend tokens))))
@@ -102,12 +111,9 @@ for any valid Emacs Lisp code for leaf nodes."
                  (let ((item (nth 1 (split-string (orgify-lastcar token) " ")))
                        (collection (nth 3 (split-string (orgify-lastcar token) " "))))
                    (push `(cl-loop
-                           for iter in (gethash ,collection env)
+                           for iter in (alist-get ',(intern-soft collection) env)
                            do (progn
-                                ;; This puthash is ugly! Instead, leaf
-                                ;; nodes should be eval expressions so
-                                ;; iter can just be passed through.
-                                (puthash ,item iter env)
+                                (push (cons ',(intern-soft item) iter) env)
                                 (,(orgify--parse tokens istart iend) env)))
                          root))
                  (setq cur iend)))))
@@ -115,6 +121,7 @@ for any valid Emacs Lisp code for leaf nodes."
     `(lambda (env) ,@(reverse root))))
 
 (defun orgify--compile-and-exec (input env)
+  "Compile INPUT and execute it with ENV."
   (funcall
    (orgify--parse (orgify--tokenize input))
    env))
