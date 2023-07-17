@@ -1,5 +1,6 @@
 (add-to-list 'load-path "../")
 (require 'ert)
+(require 'cl-lib)
 (require 'orgify-compiler)
 
 ;;; Tokenizer
@@ -75,40 +76,28 @@
 
 ;;; Fixture tests
 
-(defun simple-template ()
-  (with-temp-buffer
-    (insert-file-contents "test/fixtures/simple-template.html")
-    (buffer-string)))
+(cl-defun assert-compiled (&key expect input env)
+  (should (equal
+           expect
+           (with-temp-buffer
+             (orgify--compile-and-exec input (or env '()))
+             (buffer-string)))))
 
-(ert-deftest test-simple-template-fixture ()
-  (let ((env-alist '((name . "world") (pages . ("page-one" "page-two"))))
-        (input (with-temp-buffer
-                 (insert-file-contents "test/fixtures/simple-template.html")
-                 (buffer-string))))
-    (should
-     (equal
-      "<p>Hello world!</p>\n\n<ul>\n  \n  <li>\n    page-one\n  </li>\n  \n  <li>\n    page-two\n  </li>\n  \n</ul>\n"
-      (with-temp-buffer
-        (orgify--compile-and-exec input env-alist)
-        (buffer-string))))))
+(ert-deftest test-compile-simple-exprs ()
+  (assert-compiled :expect "42"
+                   :input "{{ (+ 1 41) }}")
+  (assert-compiled :expect "<p>hello 42</p>"
+                   :input "<p>{{ \"hello\" }} {{ (* 2 21) }}</p>"))
 
-(ert-deftest test-compile-expr ()
-  (let ((env-alist '())
-        (input "<p>{{ (+ 1 2) }}</p>"))
-    (should
-     (equal
-      "<p>3</p>"
-      (with-temp-buffer
-        (orgify--compile-and-exec input env-alist)
-        (buffer-string))))))
+(ert-deftest test-compile-with-env ()
+  (assert-compiled :expect "Hello, world!"
+                   :input "Hello, {{ name }}!"
+                   :env '((name . "world")))
 
-(ert-deftest test-compile-exprs ()
-  (let ((env-alist '())
-        (input "<p>{{ \"hello\" }} {{ (+ 1 2) }}</p>"))
-    (should
-     (equal
-      "<p>hello 3</p>"
-      (with-temp-buffer
-        (orgify--compile-and-exec input env-alist)
-        (buffer-string))))))
+  (assert-compiled :expect "<ul>\n<li>page-one</li>\n\n<li>page-two</li>\n"
+                   :input "<ul>#each page in pages\n<li>{{ page }}</li>\n/each</ul>"
+                   :env '((pages . ("page-one" "page-two"))))
 
+  (assert-compiled :expect "<ul>\n<li>page-one 2</li>\n\n<li>page-two 2</li>\n"
+                   :input "<ul>#each page in pages\n<li>{{ page }} {{ (length pages) }}</li>\n/each</ul>"
+                   :env '((pages . ("page-one" "page-two")))))
