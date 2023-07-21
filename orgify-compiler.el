@@ -103,7 +103,7 @@ through sub-expressions (like in #each)."
                  (let ((item (nth 1 (split-string (orgify-lastcar token) " ")))
                        (collection (nth 3 (split-string (orgify-lastcar token) " "))))
                    (push `(cl-loop
-                           for iter in (alist-get ',(intern-soft collection) env)
+                           for iter in (orgify--eval-string ,collection env)
                            do (progn
                                 (push (cons ',(intern-soft item) iter) env)
                                 (,(orgify--parse tokens istart iend) env)))

@@ -60,7 +60,7 @@
   (should (equal '(lambda (env) (insert (orgify--eval-string "foobar" env))) (orgify--parse '((expr "foobar"))))))
 
 (ert-deftest test-parsing-loops ()
-  (should (equal '(lambda (env) (cl-loop for iter in (alist-get 'foobar env)
+  (should (equal '(lambda (env) (cl-loop for iter in (orgify--eval-string "foobar" env)
                                          do (progn
                                               (push (cons 'foo iter) env)
                                               ((lambda (env)
