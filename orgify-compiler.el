@@ -8,18 +8,15 @@
 
 (require 'cl-lib)
 
-(defvar-local orgify--substitution-regexp
-    (rx "{{"
-        (zero-or-more blank)
-        (*? nonl)
-        (zero-or-more blank)
-        "}}"))
+(defvar-local orgify--obrace-regexp "{{")
 
-(defvar-local orgify--each-begin-regexp
-    (rx "#each" (zero-or-more nonl)))
+(defvar-local orgify--cbrace-regexp "}}")
 
-(defvar-local orgify--each-end-regexp
-    (rx "/each" (zero-or-more nonl)))
+(defvar-local orgify--oeach-regexp (rx "#each" (zero-or-more nonl)))
+
+;; Perhaps change up the syntax here to avoid issue with "every/each"
+;; or "when/if".
+(defvar-local orgify--ceach-regexp (rx "/each" (zero-or-more nonl)))
 
 (defun orgify-lastcar (l)
   "Get last element of L."
@@ -32,7 +29,7 @@
 
 (defun orgify--tokenize (input)
   "Collects INPUT into tokens for the Orgify template language."
-  (let ((tokens '()) (cur-text "") (idx 0) expecting-each-end)
+  (let ((tokens '()) (cur-text "") (idx 0))
     (cl-flet ((purge-text ()
                 (when (> (length cur-text) 0)
                   (push (list 'text cur-text) tokens)
@@ -42,32 +39,30 @@
         ;; idx onwards. `string-start' in the regexp itself doesn't
         ;; work as I would expect, seemingly always matching the
         ;; entirety of input.
-        (cond ((eq (string-match orgify--substitution-regexp input idx) idx)
+        ;; TODO: DRY
+        (cond ((eq (string-match orgify--obrace-regexp input idx) idx)
                (purge-text)
-               (push `(expr ,(orgify--extract-sub (match-string 0 input))) tokens)
+               (push `(obrace ,(match-string 0 input)) tokens)
                (setq idx (1- (match-end 0))))
-              ((eq (string-match orgify--each-begin-regexp input idx) idx)
+              ((eq (string-match orgify--cbrace-regexp input idx) idx)
+               (purge-text)
+               (push `(cbrace ,(match-string 0 input)) tokens)
+               (setq idx (1- (match-end 0))))
+              ((eq (string-match orgify--oeach-regexp input idx) idx)
                ;; Expecting "#each foo in bar" only
                (when (save-match-data
                        (> (length (split-string (match-string 0 input))) 4))
                  (error "Invalid loop in template: %s" (match-string 0 input)))
                (purge-text)
-               (push `(each-begin ,(match-string 0 input)) tokens)
-               (setq expecting-each-end (match-string 0 input))
+               (push `(oeach ,(match-string 0 input)) tokens)
                (setq idx (1- (match-end 0))))
-              ((eq (string-match orgify--each-end-regexp input idx) idx)
+              ((eq (string-match orgify--ceach-regexp input idx) idx)
                (purge-text)
-               (push `(each-end ,(match-string 0 input)) tokens)
-               (setq expecting-each-end nil)
+               (push `(ceach ,(match-string 0 input)) tokens)
                (setq idx (1- (match-end 0))))
               (t
                (setq cur-text (concat cur-text (char-to-string (aref input idx))))))
         (cl-incf idx))
-
-      ;; Failed to reach /each
-      (when expecting-each-end
-        (error "Expected end of #each: %s" expecting-each-end))
-
       (purge-text))
     (reverse tokens)))
 
@@ -92,11 +87,22 @@ through sub-expressions (like in #each)."
       (let ((token (nth cur tokens)))
         (cond ((eq 'text (car token))
                (push `(insert ,(orgify-lastcar token)) root))
-              ((eq 'expr (car token))
-               (push `(insert (orgify--eval-string ,(orgify-lastcar token) env)) root))
-              ((eq 'each-begin (car token))
+              ((eq 'obrace (car token))
+               ;; Can safely assume that the next token is a single
+               ;; text node, and the one following that is a closing
+               ;; brace.
+               (when (not (eq 'cbrace (car (nth (+ cur 2) tokens))))
+                 (error "Missing closing handlebars"))
+               (push `(insert (orgify--eval-string
+                               ,(orgify-lastcar (nth (1+ cur) tokens))
+                               env))
+                     root)
+               (setq cur (+ cur 2)))
+              ((eq 'cbrace (car token))
+               (error "Unexpected closing handlebars"))
+              ((eq 'oeach (car token))
                (let ((istart (1+ cur)) (iend (1+ cur)))
-                 (while (not (eq 'each-end (car (nth iend tokens))))
+                 (while (not (eq 'ceach (car (nth iend tokens))))
                    (when (> iend (length tokens))
                      (error "Missing end-each token"))
                    (cl-incf iend))
@@ -108,7 +114,9 @@ through sub-expressions (like in #each)."
                                 (push (cons ',(intern-soft item) iter) env)
                                 (,(orgify--parse tokens istart iend) env)))
                          root))
-                 (setq cur iend)))))
+                 (setq cur iend)))
+              ((eq 'ceach (car token))
+               (error "Unexpected closing each"))))
       (setq cur (1+ cur)))
     `(lambda (env) ,@(reverse root))))
 
