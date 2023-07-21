@@ -22,11 +22,6 @@
   "Get last element of L."
   (car (cdr l)))
 
-(defun orgify--extract-sub (source)
-  "Extract substitution variable from SOURCE."
-  (save-match-data
-    (string-trim (substring source 2 (- (length source) 2)))))
-
 (defun orgify--tokenize (input)
   "Collects INPUT into tokens for the Orgify template language."
   (let ((tokens '()) (cur-text "") (idx 0))
