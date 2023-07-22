@@ -50,12 +50,10 @@
                    :input "Hello, {{ name }}!"
                    :env '((name . "world")))
 
-  (assert-compiled :expect "<ul>\n<li>page-one</li>\n\n<li>page-two</li>\n"
+  (assert-compiled :expect "<ul>\n<li>page-one</li>\n\n<li>page-two</li>\n</ul>"
                    :input "<ul>#each page in pages\n<li>{{ page }}</li>\n/each</ul>"
                    :env '((pages . ("page-one" "page-two"))))
 
-  (assert-compiled :expect "<ul>\n<li>page-one 2</li>\n\n<li>page-two 2</li>\n"
+  (assert-compiled :expect "<ul>\n<li>page-one 2</li>\n\n<li>page-two 2</li>\n</ul>"
                    :input "<ul>#each page in pages\n<li>{{ page }} {{ (length pages) }}</li>\n/each</ul>"
                    :env '((pages . ("page-one" "page-two")))))
-
-(string-join '("foo" "bar"))

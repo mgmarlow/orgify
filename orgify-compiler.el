@@ -8,16 +8,6 @@
 
 (require 'cl-lib)
 
-(defvar-local orgify--obrace-regexp "{{")
-
-(defvar-local orgify--cbrace-regexp "}}")
-
-(defvar-local orgify--oeach-regexp (rx "#each" (zero-or-more nonl)))
-
-;; Perhaps change up the syntax here to avoid issue with "every/each"
-;; or "when/if".
-(defvar-local orgify--ceach-regexp (rx "/each" (zero-or-more nonl)))
-
 (defun orgify-lastcar (l)
   "Get last element of L."
   (car (cdr l)))
@@ -35,15 +25,15 @@
         ;; work as I would expect, seemingly always matching the
         ;; entirety of input.
         ;; TODO: DRY
-        (cond ((eq (string-match orgify--obrace-regexp input idx) idx)
+        (cond ((eq (string-match "{{" input idx) idx)
                (purge-text)
                (push `(obrace ,(match-string 0 input)) tokens)
                (setq idx (1- (match-end 0))))
-              ((eq (string-match orgify--cbrace-regexp input idx) idx)
+              ((eq (string-match "}}" input idx) idx)
                (purge-text)
                (push `(cbrace ,(match-string 0 input)) tokens)
                (setq idx (1- (match-end 0))))
-              ((eq (string-match orgify--oeach-regexp input idx) idx)
+              ((eq (string-match "#each.*" input idx) idx)
                ;; Expecting "#each foo in bar" only
                (when (save-match-data
                        (> (length (split-string (match-string 0 input))) 4))
@@ -51,7 +41,7 @@
                (purge-text)
                (push `(oeach ,(match-string 0 input)) tokens)
                (setq idx (1- (match-end 0))))
-              ((eq (string-match orgify--ceach-regexp input idx) idx)
+              ((eq (string-match "/each" input idx) idx)
                (purge-text)
                (push `(ceach ,(match-string 0 input)) tokens)
                (setq idx (1- (match-end 0))))
